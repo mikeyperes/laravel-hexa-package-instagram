@@ -8,6 +8,7 @@ use hexa_package_browser_worker\Services\BrowserHttpService;
 use hexa_package_instagram\Domains\Config\InstagramConfigRepository;
 use hexa_package_instagram\Services\InstagramAccountSessionService;
 use hexa_package_instagram\Services\InstagramImportService;
+use hexa_package_instagram\Services\InstagramScraperService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
@@ -365,6 +366,94 @@ class InstagramPackageTest extends TestCase
         $this->assertSame('public_embed_srcset', $result['data']['method_used']);
         $this->assertSame('https://cdn.example.com/post-full.jpg', $result['data']['image_url']);
         $this->assertStringContainsString("Men's Night Out", $result['data']['caption']);
+    }
+
+    public function test_profile_scan_fails_cleanly_when_worker_is_redirected_to_login(): void
+    {
+        app()->instance(BrowserWorkerBridgeContract::class, new class implements BrowserWorkerBridgeContract {
+            public function health(): array
+            {
+                return ['success' => true];
+            }
+
+            public function integrityTest(?string $profile = null): array
+            {
+                return ['success' => true];
+            }
+
+            public function status(?string $profile = null): array
+            {
+                return ['success' => true];
+            }
+
+            public function logs(int $limit = 100): array
+            {
+                return ['success' => true];
+            }
+
+            public function launchProfile(?string $profile = null): array
+            {
+                return ['success' => true];
+            }
+
+            public function closeProfile(?string $profile = null): array
+            {
+                return ['success' => true];
+            }
+
+            public function logoutProfile(?string $profile = null): array
+            {
+                return ['success' => true];
+            }
+
+            public function deleteProfile(?string $profile = null): array
+            {
+                return ['success' => true];
+            }
+
+            public function pageHtml(?string $profile, string $url, array $options = []): array
+            {
+                return ['success' => true];
+            }
+
+            public function pageText(?string $profile, string $url, array $options = []): array
+            {
+                return ['success' => true];
+            }
+
+            public function pageScreenshot(?string $profile, string $url, array $options = []): array
+            {
+                return ['success' => true];
+            }
+
+            public function runAutomation(?string $profile, array $steps, array $options = []): array
+            {
+                return [
+                    'success' => true,
+                    'message' => 'Automation flow completed.',
+                    'status_code' => 200,
+                    'data' => [
+                        'results' => [
+                            ['label' => 'extract_profile', 'result' => [
+                                'heading' => '',
+                                'body_excerpt' => 'Log into Instagram Mobile number, username or email Password Create new account',
+                                'post_links' => [],
+                                'media' => [['src' => 'https://cdn.example.com/login.jpg']],
+                            ]],
+                        ],
+                        'final' => [
+                            'final_url' => 'https://www.instagram.com/accounts/login/?next=https%3A%2F%2Fwww.instagram.com%2Fjpnmiami%2F',
+                        ],
+                    ],
+                ];
+            }
+        });
+
+        $result = app(InstagramScraperService::class)->profileScan('ops.backup', 'jpnmiami', 3);
+
+        $this->assertFalse($result['success']);
+        $this->assertSame('Instagram profile scan requires a connected account.', $result['message']);
+        $this->assertStringContainsString('redirected back to the Instagram login flow', $result['detail']);
     }
 
     public function test_account_routes_save_and_activate_multiple_profiles(): void

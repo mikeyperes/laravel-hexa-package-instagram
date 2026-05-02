@@ -57,6 +57,20 @@ class InstagramScraperService
         ]);
 
         $probe = $this->resultByLabel($result, 'extract_profile');
+        if ($this->isLoginRedirect($result, $probe)) {
+            return [
+                'success' => false,
+                'message' => 'Instagram profile scan requires a connected account.',
+                'detail' => 'The browser worker was redirected back to the Instagram login flow instead of the requested profile.',
+                'status_code' => (int) ($result['status_code'] ?? 0),
+                'data' => [
+                    'profile' => $resolved,
+                    'instagram_username' => $username,
+                    'scan' => $probe,
+                    'worker' => $result['data'] ?? [],
+                ],
+            ];
+        }
 
         return [
             'success' => (bool) ($result['success'] ?? false),
@@ -111,6 +125,20 @@ class InstagramScraperService
         ]);
 
         $probe = $this->resultByLabel($result, 'extract_story');
+        if ($this->isLoginRedirect($result, $probe)) {
+            return [
+                'success' => false,
+                'message' => 'Instagram story scan requires a connected account.',
+                'detail' => 'The browser worker was redirected back to the Instagram login flow instead of the requested stories page.',
+                'status_code' => (int) ($result['status_code'] ?? 0),
+                'data' => [
+                    'profile' => $resolved,
+                    'instagram_username' => $username,
+                    'scan' => $probe,
+                    'worker' => $result['data'] ?? [],
+                ],
+            ];
+        }
 
         return [
             'success' => (bool) ($result['success'] ?? false),
@@ -202,5 +230,20 @@ JS;
             'status_code' => 0,
             'data' => [],
         ];
+    }
+
+    private function isLoginRedirect(array $result, array $probe): bool
+    {
+        $finalUrl = strtolower((string) ($result['data']['final']['final_url'] ?? ''));
+        $bodyExcerpt = strtolower((string) ($probe['body_excerpt'] ?? ''));
+
+        if (str_contains($finalUrl, '/accounts/login')) {
+            return true;
+        }
+
+        return str_contains($bodyExcerpt, 'log into instagram')
+            || str_contains($bodyExcerpt, 'log in to instagram')
+            || str_contains($bodyExcerpt, 'mobile number, username or email')
+            || str_contains($bodyExcerpt, 'create new account');
     }
 }
