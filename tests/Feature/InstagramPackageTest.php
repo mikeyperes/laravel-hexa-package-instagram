@@ -41,6 +41,21 @@ class InstagramPackageTest extends TestCase
             $table->integer('sort_order')->default(0);
             $table->timestamps();
         });
+
+        Schema::dropIfExists('activity_logs');
+        Schema::create('activity_logs', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('user_id')->nullable();
+            $table->string('action')->nullable();
+            $table->string('category')->nullable();
+            $table->text('description')->nullable();
+            $table->longText('context')->nullable();
+            $table->string('related_type')->nullable();
+            $table->unsignedBigInteger('related_id')->nullable();
+            $table->string('ip_address')->nullable();
+            $table->string('user_timezone')->nullable();
+            $table->timestamps();
+        });
     }
 
     public function test_repository_saves_multiple_accounts_and_active_profile(): void
