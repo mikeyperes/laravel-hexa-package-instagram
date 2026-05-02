@@ -274,4 +274,41 @@ class InstagramPackageTest extends TestCase
         $this->assertSame('https://cdn.example.com/post-full.jpg', $result['data']['image_url']);
         $this->assertStringContainsString("Men's Night Out", $result['data']['caption']);
     }
+
+    public function test_account_routes_save_and_activate_multiple_profiles(): void
+    {
+        $this->withoutMiddleware();
+
+        $saveMain = $this->postJson('/instagram/accounts', [
+            'label' => 'JPN Main',
+            'profile' => 'JPN.Main',
+            'instagram_username' => 'jpnmiami',
+            'password' => 'secret-pass',
+            'set_active' => true,
+        ]);
+
+        $saveMain->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('settings.session_profile', 'jpn-main');
+
+        $saveBackup = $this->postJson('/instagram/accounts', [
+            'label' => 'Ops Backup',
+            'profile' => 'ops.backup',
+            'instagram_username' => 'opsbackup',
+            'set_active' => false,
+        ]);
+
+        $saveBackup->assertOk()
+            ->assertJsonPath('success', true);
+
+        $activate = $this->postJson('/instagram/accounts/activate', [
+            'profile' => 'ops.backup',
+        ]);
+
+        $activate->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('settings.session_profile', 'ops-backup')
+            ->assertJsonPath('status.active_profile', 'ops-backup')
+            ->assertJsonPath('status.active_account.instagram_username', 'opsbackup');
+    }
 }

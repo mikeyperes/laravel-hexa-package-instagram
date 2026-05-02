@@ -48,7 +48,7 @@ class InstagramAccountsController extends Controller
         ]);
     }
 
-    public function activate(Request $request, InstagramConfigRepository $config): JsonResponse
+    public function activate(Request $request, InstagramConfigRepository $config, InstagramAccountSessionService $sessions): JsonResponse
     {
         $validated = $request->validate([
             'profile' => ['required', 'string', 'max:80', 'regex:/^[A-Za-z0-9._-]+$/'],
