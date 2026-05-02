@@ -1,0 +1,277 @@
+<?php
+
+namespace Tests\Feature;
+
+use hexa_core\Services\CredentialService;
+use hexa_package_browser_worker\Contracts\BrowserWorkerBridgeContract;
+use hexa_package_browser_worker\Services\BrowserHttpService;
+use hexa_package_instagram\Domains\Config\InstagramConfigRepository;
+use hexa_package_instagram\Services\InstagramAccountSessionService;
+use hexa_package_instagram\Services\InstagramImportService;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+use Tests\TestCase;
+
+class InstagramPackageTest extends TestCase
+{
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->requireInstalledPackage(
+            'hexawebsystems/laravel-hexa-package-instagram',
+            InstagramConfigRepository::class
+        );
+
+        $appKey = 'base64:' . base64_encode(str_repeat('i', 32));
+        config()->set('app.key', $appKey);
+        putenv('APP_KEY=' . $appKey);
+        $_ENV['APP_KEY'] = $appKey;
+        $_SERVER['APP_KEY'] = $appKey;
+
+        Schema::dropIfExists('settings');
+        Schema::create('settings', function (Blueprint $table): void {
+            $table->id();
+            $table->string('key')->unique();
+            $table->text('value')->nullable();
+            $table->string('group')->default('general');
+            $table->string('type')->default('text');
+            $table->string('label')->nullable();
+            $table->integer('sort_order')->default(0);
+            $table->timestamps();
+        });
+    }
+
+    public function test_repository_saves_multiple_accounts_and_active_profile(): void
+    {
+        $repository = app(InstagramConfigRepository::class);
+        $repository->saveAccount('JPN Main', 'JPN.Main', 'JPNMiami', true);
+        $repository->saveAccount('Ops Backup', 'ops_backup', 'ops.backup', false);
+
+        $settings = $repository->all();
+
+        $this->assertSame('jpn-main', $settings['session_profile']);
+        $this->assertCount(2, $settings['accounts']);
+        $this->assertSame('jpnmiami', $repository->findAccount('JPN.Main')['instagram_username']);
+        $this->assertSame('ops.backup', $repository->findAccount('ops_backup')['instagram_username']);
+    }
+
+    public function test_login_uses_saved_credentials_and_detects_connected_state(): void
+    {
+        $repository = app(InstagramConfigRepository::class);
+        $repository->saveAccount('JPN Main', 'JPN.Main', 'jpnmiami', true);
+        app(CredentialService::class)->store('instagram', 'account_password_jpn-main', 'secret-pass');
+
+        app()->instance(BrowserWorkerBridgeContract::class, new class implements BrowserWorkerBridgeContract {
+            public int $calls = 0;
+
+            public function health(): array
+            {
+                return ['success' => true, 'message' => 'ok'];
+            }
+
+            public function integrityTest(?string $profile = null): array
+            {
+                return ['success' => true, 'message' => 'ok'];
+            }
+
+            public function status(?string $profile = null): array
+            {
+                return ['success' => true, 'message' => 'ok', 'data' => ['profile' => $profile]];
+            }
+
+            public function logs(int $limit = 100): array
+            {
+                return ['success' => true, 'data' => []];
+            }
+
+            public function launchProfile(?string $profile = null): array
+            {
+                return ['success' => true];
+            }
+
+            public function closeProfile(?string $profile = null): array
+            {
+                return ['success' => true];
+            }
+
+            public function logoutProfile(?string $profile = null): array
+            {
+                return ['success' => true];
+            }
+
+            public function deleteProfile(?string $profile = null): array
+            {
+                return ['success' => true];
+            }
+
+            public function pageHtml(?string $profile, string $url, array $options = []): array
+            {
+                return ['success' => true];
+            }
+
+            public function pageText(?string $profile, string $url, array $options = []): array
+            {
+                return ['success' => true];
+            }
+
+            public function pageScreenshot(?string $profile, string $url, array $options = []): array
+            {
+                return ['success' => true];
+            }
+
+            public function runAutomation(?string $profile, array $steps, array $options = []): array
+            {
+                $this->calls++;
+                $loginProbe = $this->calls === 1
+                    ? ['connected' => false, 'login_form' => true, 'challenge' => false, 'alerts' => []]
+                    : ['connected' => true, 'login_form' => false, 'challenge' => false, 'alerts' => [], 'path' => '/'];
+
+                return [
+                    'success' => true,
+                    'message' => 'Automation flow completed.',
+                    'status_code' => 200,
+                    'data' => [
+                        'results' => [
+                            ['label' => 'detect_login_state', 'result' => $loginProbe],
+                        ],
+                        'final' => [
+                            'screenshot_data_url' => 'data:image/png;base64,proof',
+                        ],
+                    ],
+                ];
+            }
+        });
+
+        $service = app(InstagramAccountSessionService::class);
+        $result = $service->login('JPN.Main');
+
+        $this->assertTrue($result['success']);
+        $this->assertSame('Instagram login flow finished.', $result['message']);
+        $this->assertTrue($result['data']['connected']);
+        $this->assertSame('jpn-main', $result['data']['profile']);
+        $this->assertSame('jpnmiami', $result['data']['account']['instagram_username']);
+    }
+
+    public function test_integrity_test_reports_worker_and_connected_state(): void
+    {
+        $repository = app(InstagramConfigRepository::class);
+        $repository->saveAccount('JPN Main', 'JPN.Main', 'jpnmiami', true);
+
+        app()->instance(BrowserWorkerBridgeContract::class, new class implements BrowserWorkerBridgeContract {
+            public function health(): array
+            {
+                return ['success' => true, 'message' => 'Browser worker is reachable.', 'status_code' => 200];
+            }
+
+            public function integrityTest(?string $profile = null): array
+            {
+                return ['success' => true];
+            }
+
+            public function status(?string $profile = null): array
+            {
+                return ['success' => true];
+            }
+
+            public function logs(int $limit = 100): array
+            {
+                return ['success' => true];
+            }
+
+            public function launchProfile(?string $profile = null): array
+            {
+                return ['success' => true];
+            }
+
+            public function closeProfile(?string $profile = null): array
+            {
+                return ['success' => true];
+            }
+
+            public function logoutProfile(?string $profile = null): array
+            {
+                return ['success' => true];
+            }
+
+            public function deleteProfile(?string $profile = null): array
+            {
+                return ['success' => true];
+            }
+
+            public function pageHtml(?string $profile, string $url, array $options = []): array
+            {
+                return ['success' => true];
+            }
+
+            public function pageText(?string $profile, string $url, array $options = []): array
+            {
+                return ['success' => true];
+            }
+
+            public function pageScreenshot(?string $profile, string $url, array $options = []): array
+            {
+                return ['success' => true];
+            }
+
+            public function runAutomation(?string $profile, array $steps, array $options = []): array
+            {
+                return [
+                    'success' => true,
+                    'message' => 'Automation flow completed.',
+                    'status_code' => 200,
+                    'data' => [
+                        'results' => [
+                            ['label' => 'detect_login_state', 'result' => ['connected' => true, 'login_form' => false, 'challenge' => false, 'alerts' => []]],
+                        ],
+                    ],
+                ];
+            }
+        });
+
+        $result = app(InstagramAccountSessionService::class)->integrityTest('JPN.Main');
+
+        $this->assertTrue($result['success']);
+        $this->assertSame('Browser worker is healthy and the Instagram account is connected.', $result['message']);
+        $this->assertTrue($result['data']['connected']);
+    }
+
+    public function test_public_import_fallback_extracts_image_caption_and_title(): void
+    {
+        app()->instance(BrowserHttpService::class, new class extends BrowserHttpService {
+            public function getHtml(string $url, array $options = []): array
+            {
+                if (str_contains($url, '/embed/captioned/')) {
+                    return [
+                        'success' => true,
+                        'status_code' => 200,
+                        'body' => '<html><body><img class="EmbeddedMediaImage" srcset="https://cdn.example.com/post-small.jpg 320w, https://cdn.example.com/post-full.jpg 1080w" src="https://cdn.example.com/post-small.jpg"></body></html>',
+                        'headers' => ['Content-Type' => ['text/html']],
+                        'final_url' => $url,
+                        'error' => null,
+                    ];
+                }
+
+                return [
+                    'success' => true,
+                    'status_code' => 200,
+                    'body' => '<html><head>'
+                        . '<meta property="og:title" content="Post by Chabad Nobe">'
+                        . '<meta property="og:description" content="Men&#039;s Night Out at 7835 Harding Avenue">'
+                        . '</head><body></body></html>',
+                    'headers' => ['Content-Type' => ['text/html']],
+                    'final_url' => $url,
+                    'error' => null,
+                ];
+            }
+        });
+
+        $result = app(InstagramImportService::class)->importPost('https://www.instagram.com/p/TEST123/', false);
+
+        $this->assertTrue($result['success']);
+        $this->assertSame('Imported Instagram post via public metadata fallback.', $result['message']);
+        $this->assertSame('public_embed_srcset', $result['data']['method_used']);
+        $this->assertSame('https://cdn.example.com/post-full.jpg', $result['data']['image_url']);
+        $this->assertStringContainsString("Men's Night Out", $result['data']['caption']);
+    }
+}

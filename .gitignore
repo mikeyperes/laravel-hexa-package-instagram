@@ -1,0 +1,6 @@
+/worker/node_modules/
+/worker/.wwebjs_auth/
+/worker/.cache/
+/worker/.session/
+error_log
+/worker/.wwebjs_cache/
