@@ -234,12 +234,28 @@ class InstagramAccountSessionService
     {
         return <<<'JS'
 const bodyText = (document.body?.innerText || '').trim();
+const bodyLower = bodyText.toLowerCase();
 const loginForm = Boolean(document.querySelector('input[name="username"], input[name="password"]'));
 const challenge = /challenge|checkpoint|two_factor|suspended/i.test(`${location.pathname} ${bodyText}`);
 const alerts = Array.from(document.querySelectorAll('[role="alert"]')).map((node) => (node.innerText || '').trim()).filter(Boolean);
 const visibleButtons = Array.from(document.querySelectorAll('button')).map((node) => (node.innerText || '').trim()).filter(Boolean).slice(0, 20);
 const avatarLinks = Array.from(document.querySelectorAll('a[href]')).map((node) => node.getAttribute('href') || '').filter(Boolean);
 const authenticatedMarkers = avatarLinks.filter((href) => /^\/(accounts\/edit|direct\/inbox|explore\/|[A-Za-z0-9._]+\/?)$/.test(href));
+const strongNavSelectors = [
+  'a[href="/direct/inbox/"]',
+  'a[href="/accounts/activity/"]',
+  'a[href="/accounts/edit/"]',
+  'svg[aria-label="Home"]',
+  'svg[aria-label="Search"]',
+  'svg[aria-label="Explore"]',
+  'svg[aria-label="Reels"]',
+  'svg[aria-label="Messenger"]',
+  'svg[aria-label="Notifications"]',
+  'svg[aria-label="Profile"]',
+];
+const strongNavMatches = strongNavSelectors.filter((selector) => document.querySelector(selector));
+const loginCopyDetected = /log into instagram|log in to instagram|mobile number, username or email|forgot password|log in with facebook|create new account|sign up/i.test(bodyLower);
+const connected = strongNavMatches.length > 0 && !loginCopyDetected && !loginForm && !challenge && !/\/accounts\/login/i.test(location.pathname);
 
 return {
   url: location.href,
@@ -247,12 +263,15 @@ return {
   title: document.title,
   login_form: loginForm,
   challenge,
+  login_copy_detected: loginCopyDetected,
   alerts,
   visible_buttons: visibleButtons,
   authenticated_markers: authenticatedMarkers.slice(0, 12),
   auth_indicator_count: authenticatedMarkers.length,
+  strong_nav_count: strongNavMatches.length,
+  strong_nav_matches: strongNavMatches,
   body_excerpt: bodyText.slice(0, 1200),
-  connected: authenticatedMarkers.length > 0 && !loginForm && !challenge && !/\/accounts\/login/i.test(location.pathname),
+  connected,
 };
 JS;
     }
@@ -261,15 +280,18 @@ JS;
     {
         $probe = $this->resultByLabel($result, 'detect_login_state');
 
-        $connected = (bool) ($probe['connected'] ?? false);
+        $probeConnected = (bool) ($probe['connected'] ?? false);
         $loginForm = (bool) ($probe['login_form'] ?? false);
         $challenge = (bool) ($probe['challenge'] ?? false);
+        $loginCopyDetected = (bool) ($probe['login_copy_detected'] ?? false);
+        $strongNavCount = (int) ($probe['strong_nav_count'] ?? 0);
         $alerts = $probe['alerts'] ?? [];
+        $connected = $probeConnected && !$loginForm && !$challenge && !$loginCopyDetected && $strongNavCount > 0;
         $detail = $connected
             ? 'The browser session is authenticated and reached Instagram without a login form.'
             : ($challenge
                 ? 'Instagram returned a challenge/checkpoint state for this browser profile.'
-                : ($loginForm
+                : (($loginForm || $loginCopyDetected)
                     ? 'Instagram still shows the login form for this browser profile.'
                     : 'Instagram did not confirm an authenticated session for this profile.'));
 

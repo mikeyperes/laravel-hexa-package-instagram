@@ -124,8 +124,8 @@ class InstagramPackageTest extends TestCase
             {
                 $this->calls++;
                 $loginProbe = $this->calls === 1
-                    ? ['connected' => false, 'login_form' => true, 'challenge' => false, 'alerts' => []]
-                    : ['connected' => true, 'login_form' => false, 'challenge' => false, 'alerts' => [], 'path' => '/'];
+                    ? ['connected' => false, 'login_form' => true, 'challenge' => false, 'login_copy_detected' => true, 'strong_nav_count' => 0, 'alerts' => []]
+                    : ['connected' => true, 'login_form' => false, 'challenge' => false, 'login_copy_detected' => false, 'strong_nav_count' => 2, 'alerts' => [], 'path' => '/'];
 
                 return [
                     'success' => true,
@@ -222,7 +222,7 @@ class InstagramPackageTest extends TestCase
                     'status_code' => 200,
                     'data' => [
                         'results' => [
-                            ['label' => 'detect_login_state', 'result' => ['connected' => true, 'login_form' => false, 'challenge' => false, 'alerts' => []]],
+                            ['label' => 'detect_login_state', 'result' => ['connected' => true, 'login_form' => false, 'challenge' => false, 'login_copy_detected' => false, 'strong_nav_count' => 2, 'alerts' => []]],
                         ],
                     ],
                 ];
@@ -234,6 +234,98 @@ class InstagramPackageTest extends TestCase
         $this->assertTrue($result['success']);
         $this->assertSame('Browser worker is healthy and the Instagram account is connected.', $result['message']);
         $this->assertTrue($result['data']['connected']);
+    }
+
+    public function test_status_does_not_treat_logged_out_homepage_as_connected(): void
+    {
+        $repository = app(InstagramConfigRepository::class);
+        $repository->saveAccount('Ops Backup', 'ops.backup', 'qa_nonexistent_user_hexa', true);
+
+        app()->instance(BrowserWorkerBridgeContract::class, new class implements BrowserWorkerBridgeContract {
+            public function health(): array
+            {
+                return ['success' => true, 'message' => 'Browser worker is reachable.', 'status_code' => 200];
+            }
+
+            public function integrityTest(?string $profile = null): array
+            {
+                return ['success' => true];
+            }
+
+            public function status(?string $profile = null): array
+            {
+                return ['success' => true];
+            }
+
+            public function logs(int $limit = 100): array
+            {
+                return ['success' => true];
+            }
+
+            public function launchProfile(?string $profile = null): array
+            {
+                return ['success' => true];
+            }
+
+            public function closeProfile(?string $profile = null): array
+            {
+                return ['success' => true];
+            }
+
+            public function logoutProfile(?string $profile = null): array
+            {
+                return ['success' => true];
+            }
+
+            public function deleteProfile(?string $profile = null): array
+            {
+                return ['success' => true];
+            }
+
+            public function pageHtml(?string $profile, string $url, array $options = []): array
+            {
+                return ['success' => true];
+            }
+
+            public function pageText(?string $profile, string $url, array $options = []): array
+            {
+                return ['success' => true];
+            }
+
+            public function pageScreenshot(?string $profile, string $url, array $options = []): array
+            {
+                return ['success' => true];
+            }
+
+            public function runAutomation(?string $profile, array $steps, array $options = []): array
+            {
+                return [
+                    'success' => true,
+                    'message' => 'Automation flow completed.',
+                    'status_code' => 200,
+                    'data' => [
+                        'results' => [
+                            ['label' => 'detect_login_state', 'result' => [
+                                'connected' => true,
+                                'login_form' => false,
+                                'challenge' => false,
+                                'login_copy_detected' => true,
+                                'strong_nav_count' => 0,
+                                'authenticated_markers' => ['/popular/'],
+                                'alerts' => [],
+                            ]],
+                        ],
+                    ],
+                ];
+            }
+        });
+
+        $result = app(InstagramAccountSessionService::class)->status('ops.backup');
+
+        $this->assertTrue($result['success']);
+        $this->assertFalse($result['data']['connected']);
+        $this->assertSame('Instagram account is not connected yet.', $result['message']);
+        $this->assertSame('Instagram still shows the login form for this browser profile.', $result['detail']);
     }
 
     public function test_public_import_fallback_extracts_image_caption_and_title(): void
