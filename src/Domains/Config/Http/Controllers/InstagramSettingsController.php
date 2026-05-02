@@ -2,6 +2,7 @@
 
 namespace hexa_package_instagram\Domains\Config\Http\Controllers;
 
+use hexa_core\Models\ActivityLog;
 use hexa_core\Models\Setting;
 use hexa_core\Services\CredentialService;
 use hexa_package_instagram\Domains\Config\InstagramConfigRepository;
@@ -23,6 +24,7 @@ class InstagramSettingsController extends Controller
         return view('instagram::settings.index', [
             'settings' => $settings,
             'status' => [
+                'accounts' => array_map(fn (array $account) => $sessions->accountPresentation($account), $settings['accounts']),
                 'active_profile' => $settings['session_profile'],
                 'active_account' => $activeAccount ? $sessions->accountPresentation($activeAccount) : null,
                 'has_meta_token' => $credentials->exists('instagram', 'meta_access_token'),
@@ -42,6 +44,8 @@ class InstagramSettingsController extends Controller
             'default_post_url' => ['nullable', 'url', 'max:2000'],
         ]);
 
+        ActivityLog::log('instagram', 'settings_save', 'Saved Instagram settings.', $validated);
+
         return response()->json([
             'success' => true,
             'message' => 'Instagram settings saved.',
@@ -51,7 +55,21 @@ class InstagramSettingsController extends Controller
 
     public function test(Request $request, InstagramConfigRepository $config, InstagramAccountSessionService $sessions): JsonResponse
     {
-        return response()->json($sessions->integrityTest($config->resolveProfile($request->input('profile'))));
+        $validated = $request->validate([
+            'profile' => ['nullable', 'string', 'max:80', 'regex:/^[A-Za-z0-9._-]+$/'],
+        ]);
+
+        $profile = $config->resolveProfile($validated['profile'] ?? null);
+        $result = $sessions->integrityTest($profile);
+
+        ActivityLog::log('instagram', 'connection_test', 'Ran Instagram connection test for profile: ' . $profile, [
+            'profile' => $profile,
+            'success' => (bool) ($result['success'] ?? false),
+            'message' => $result['message'] ?? null,
+            'detail' => $result['detail'] ?? null,
+        ]);
+
+        return response()->json($result);
     }
 
     public function testMetaToken(InstagramImportService $instagram): JsonResponse

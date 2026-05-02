@@ -9,7 +9,7 @@
         <div class="flex items-start justify-between gap-4 flex-wrap">
             <div>
                 <h1 class="text-2xl font-semibold text-gray-900">Instagram Settings</h1>
-                <p class="mt-2 text-sm text-gray-500">Attach browser accounts first, then use this page to save the default test targets and run the full connection check.</p>
+                <p class="mt-2 text-sm text-gray-500">Attach browser accounts first, then use this page to save default test targets and run account-specific connection checks.</p>
             </div>
             <div class="flex items-center gap-2 flex-wrap">
                 <a href="{{ route('instagram.accounts') }}" class="inline-flex items-center px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700">Open Accounts</a>
@@ -21,9 +21,9 @@
     <div class="bg-blue-50 border border-blue-200 rounded-xl p-5 text-sm text-blue-900 space-y-3">
         <div class="font-semibold">Instructions</div>
         <ol class="list-decimal list-inside space-y-1 text-blue-900">
-            <li>Go to the <a href="{{ route('instagram.accounts') }}" class="font-medium underline">Accounts page</a>, save one or more Instagram account profiles, and store the login password there.</li>
-            <li>Click <span class="font-medium">Log in with saved credentials</span> on the account card you want to use.</li>
-            <li>Come back here, save the default usernames / sample post URL, and run the full connection test.</li>
+            <li>Go to the <a href="{{ route('instagram.accounts') }}" class="font-medium underline">Accounts page</a>, save one or more Instagram accounts, and store each password in its Hexa Core credential field.</li>
+            <li>Use <span class="font-medium">Log in with saved credentials</span> on the account card you want to attach.</li>
+            <li>Come back here, pick which saved account to test, and run the full connection check.</li>
             <li>Use <a href="{{ route('instagram.raw') }}" class="font-medium underline">Raw Workspace</a> for live profile scans, story pulls, and post-import debugging.</li>
         </ol>
         <div class="flex items-center gap-3 flex-wrap text-sm">
@@ -39,20 +39,20 @@
             <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-5">
                 <div>
                     <h2 class="text-lg font-semibold text-gray-900">Default Test Targets</h2>
-                    <p class="mt-1 text-sm text-gray-500">These defaults prefill the Raw Workspace and the full connection test.</p>
+                    <p class="mt-1 text-sm text-gray-500">These defaults prefill the Raw Workspace and the public import checks.</p>
                 </div>
 
                 <form @submit.prevent="save()" class="space-y-5">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Default profile username</label>
                         <input type="text" x-model="form.default_profile_username" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="jpnmiami">
-                        <p class="mt-1 text-xs text-gray-500">Used for the quick profile-scan checks.</p>
+                        <p class="mt-1 text-xs text-gray-500">Used for quick attached-account profile scans.</p>
                     </div>
 
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Default story username</label>
                         <input type="text" x-model="form.default_story_username" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="jpnmiami">
-                        <p class="mt-1 text-xs text-gray-500">Used for the quick story-pull checks.</p>
+                        <p class="mt-1 text-xs text-gray-500">Used for quick attached-account story pulls.</p>
                     </div>
 
                     <div>
@@ -63,7 +63,7 @@
 
                     <div class="flex items-center justify-end gap-3">
                         <button type="submit" :disabled="saving" class="inline-flex items-center px-5 py-2.5 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 disabled:opacity-50">
-                            <span x-text="saving ? 'Saving...' : 'Save Settings'"></span>
+                            <span x-text="saving ? 'Saving…' : 'Save Settings'"></span>
                         </button>
                     </div>
                 </form>
@@ -95,13 +95,66 @@
                 <div class="flex items-start justify-between gap-3 flex-wrap">
                     <div>
                         <h2 class="text-lg font-semibold text-gray-900">Full Connection Test</h2>
-                        <p class="mt-1 text-sm text-gray-500">Checks browser-worker health and whether the active Instagram browser profile is really logged in.</p>
+                        <p class="mt-1 text-sm text-gray-500">Pick a saved account and verify that browser-worker can prove a real authenticated Instagram session.</p>
                     </div>
-                    <button type="button" @click="runTest()" :disabled="testing" class="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50">
-                        <span x-text="testing ? 'Testing...' : 'Run Connection Test'"></span>
+                    <button type="button" @click="runTest()" :disabled="testing || !testProfile" class="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50">
+                        <span x-text="testing ? 'Testing…' : 'Run Connection Test'"></span>
                     </button>
                 </div>
-                <div class="rounded-xl border border-slate-200 bg-slate-950 text-slate-100 p-4 text-xs font-mono min-h-[14rem] whitespace-pre-wrap" x-text="testOutput"></div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Saved account to test</label>
+                    <select x-model="testProfile" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white">
+                        <option value="">Select a saved Instagram account</option>
+                        @foreach($status['accounts'] as $account)
+                            <option value="{{ $account['profile'] }}">{{ $account['label'] }} — {{ $account['instagram_username'] ?: $account['profile'] }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <div class="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-3">
+                    <div class="flex items-center justify-between gap-3 flex-wrap">
+                        <div>
+                            <div class="text-xs uppercase tracking-wide text-gray-500">Current result</div>
+                            <div class="mt-1 text-sm font-semibold" :class="testSummaryClass()" x-text="testSummary()"></div>
+                        </div>
+                        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium"
+                              :class="testBadgeClass()"
+                              x-text="testBadge()"></span>
+                    </div>
+                    <div class="text-sm text-gray-700" x-text="testDetail()"></div>
+                    <template x-if="testResult?.data?.instagram_status?.data">
+                        <div class="grid gap-3 text-sm">
+                            <div class="rounded-lg border border-gray-200 bg-white px-4 py-3">
+                                <div class="text-xs uppercase tracking-wide text-gray-500">Account</div>
+                                <div class="mt-1 font-medium text-gray-900" x-text="testAccountLabel()"></div>
+                                <div class="mt-1 text-xs text-gray-500 font-mono" x-text="testProfile || 'No account selected'"></div>
+                            </div>
+                            <div class="rounded-lg border border-gray-200 bg-white px-4 py-3">
+                                <div class="text-xs uppercase tracking-wide text-gray-500">Current URL</div>
+                                <div class="mt-1 text-gray-900 break-all" x-text="testCurrentUrl()"></div>
+                            </div>
+                            <div class="rounded-lg border border-gray-200 bg-white px-4 py-3">
+                                <div class="text-xs uppercase tracking-wide text-gray-500">Worker state</div>
+                                <div class="mt-1 text-gray-900" x-text="testWorkerState()"></div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                <x-hexa-log-viewer
+                    title="Instagram Connection Test Log"
+                    log-var="testLog"
+                    slug="instagram-settings-test"
+                    theme="dark"
+                    :persist="false" />
+
+                <details class="rounded-lg border border-gray-200 bg-white" x-show="testResult" x-cloak>
+                    <summary class="cursor-pointer px-4 py-3 text-sm font-medium text-gray-800">Show raw test payload</summary>
+                    <div class="border-t border-gray-200 px-4 py-3">
+                        <pre class="text-xs font-mono whitespace-pre-wrap break-words text-gray-700" x-text="pretty(testResult)"></pre>
+                    </div>
+                </details>
             </div>
 
             <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
@@ -122,10 +175,8 @@
                         </div>
                     </div>
                     <div class="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
-                        <div class="text-xs uppercase tracking-wide text-gray-500">Meta token</div>
-                        <div class="mt-1 font-medium {{ $status['has_meta_token'] ? 'text-emerald-700' : 'text-gray-500' }}">
-                            {{ $status['has_meta_token'] ? ($status['meta_token_masked'] ?: 'Configured') : 'Not set' }}
-                        </div>
+                        <div class="text-xs uppercase tracking-wide text-gray-500">Saved accounts</div>
+                        <div class="mt-1 font-medium text-gray-900">{{ count($status['accounts']) }}</div>
                     </div>
                 </div>
             </div>
@@ -144,6 +195,7 @@
 <script>
 function instagramSettingsPage() {
     return {
+        accounts: @json($status['accounts']),
         form: {
             default_profile_username: @json($settings['default_profile_username']),
             default_story_username: @json($settings['default_story_username']),
@@ -151,12 +203,26 @@ function instagramSettingsPage() {
         },
         saving: false,
         testing: false,
-        testOutput: 'Run the full connection test to verify browser-worker health and the active Instagram browser session.',
+        testProfile: @json($status['active_profile']),
+        testResult: null,
+        testLog: [],
         toast: { show: false, message: '', type: 'success' },
         toastTimer: null,
 
+        init() {
+            this.log('info', 'Instagram settings page loaded. Pick a saved account and run the connection test when ready.');
+        },
+
         csrfToken() {
-            return document.querySelector('meta[name=\"csrf-token\"]')?.content || '';
+            return document.querySelector('meta[name="csrf-token"]')?.content || '';
+        },
+
+        now() {
+            return new Date().toLocaleTimeString();
+        },
+
+        log(type, message, detail = null) {
+            this.testLog.push({ type, message, detail, time: this.now() });
         },
 
         showToast(message, type = 'success') {
@@ -175,7 +241,6 @@ function instagramSettingsPage() {
 
         async save() {
             this.saving = true;
-
             try {
                 const response = await fetch('{{ route('settings.instagram.update') }}', {
                     method: 'POST',
@@ -188,13 +253,15 @@ function instagramSettingsPage() {
                 });
 
                 const data = await response.json();
-
                 if (response.ok && data.success) {
+                    this.log('success', 'Saved Instagram settings.', this.form);
                     this.showToast(data.message || 'Instagram settings saved.');
                 } else {
+                    this.log('error', data.message || 'Failed to save Instagram settings.', data.errors || null);
                     this.showToast(data.message || 'Failed to save Instagram settings.', 'error');
                 }
             } catch (error) {
+                this.log('error', 'Failed to save Instagram settings.', error?.message || String(error));
                 this.showToast('Failed to save Instagram settings.', 'error');
             } finally {
                 this.saving = false;
@@ -202,32 +269,103 @@ function instagramSettingsPage() {
         },
 
         async runTest() {
+            if (!this.testProfile) {
+                this.showToast('Select a saved Instagram account first.', 'error');
+                return;
+            }
+
             this.testing = true;
-            this.testOutput = 'Running Instagram connection test...';
+            this.log('info', 'Running Instagram connection test for ' + this.testProfile + '.');
 
             try {
                 const response = await fetch('{{ route('settings.instagram.test') }}', {
                     method: 'POST',
                     headers: {
                         'Accept': 'application/json',
+                        'Content-Type': 'application/json',
                         'X-CSRF-TOKEN': this.csrfToken(),
                     },
+                    body: JSON.stringify({ profile: this.testProfile }),
                 });
 
                 const data = await response.json();
-                this.testOutput = this.pretty(data);
+                this.testResult = data;
 
                 if (response.ok && data.success) {
+                    this.log('success', 'Instagram connection test passed for ' + this.testProfile + '.', {
+                        message: data.message || '',
+                        detail: data.detail || '',
+                    });
                     this.showToast(data.message || 'Instagram connection is healthy.');
                 } else {
+                    this.log('error', 'Instagram connection test failed for ' + this.testProfile + '.', {
+                        message: data.message || '',
+                        detail: data.detail || '',
+                    });
                     this.showToast(data.message || 'Instagram connection test failed.', 'error');
                 }
             } catch (error) {
-                this.testOutput = error?.message || String(error);
+                this.testResult = { success: false, message: 'Instagram connection test failed.', detail: error?.message || String(error) };
+                this.log('error', 'Instagram connection test request failed for ' + this.testProfile + '.', error?.message || String(error));
                 this.showToast('Instagram connection test failed.', 'error');
             } finally {
                 this.testing = false;
             }
+        },
+
+        selectedAccount() {
+            return this.accounts.find((account) => account.profile === this.testProfile) || null;
+        },
+
+        testSummary() {
+            if (!this.testResult) return 'No connection test run yet.';
+            return this.testResult.message || 'Instagram connection test completed.';
+        },
+
+        testSummaryClass() {
+            if (!this.testResult) return 'text-slate-700';
+            return this.testResult.success ? 'text-emerald-700' : 'text-amber-700';
+        },
+
+        testBadge() {
+            if (!this.testResult) return 'Idle';
+            const status = this.testResult?.data?.instagram_status?.data || {};
+            if (status.connected) return 'Connected';
+            if (status.challenge) return 'Challenge';
+            if (status.login_form) return 'Needs login';
+            return this.testResult.success ? 'Healthy' : 'Not ready';
+        },
+
+        testBadgeClass() {
+            if (!this.testResult) return 'bg-slate-100 text-slate-700';
+            const status = this.testResult?.data?.instagram_status?.data || {};
+            if (status.connected) return 'bg-emerald-100 text-emerald-700';
+            if (status.challenge) return 'bg-amber-100 text-amber-700';
+            if (status.login_form) return 'bg-rose-100 text-rose-700';
+            return this.testResult.success ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-700';
+        },
+
+        testDetail() {
+            if (!this.testResult) return 'Select a saved account and run the live test.';
+            return this.testResult.detail || 'No additional detail returned.';
+        },
+
+        testCurrentUrl() {
+            const worker = this.testResult?.data?.instagram_status?.data?.worker || {};
+            const probe = this.testResult?.data?.instagram_status?.data?.probe || {};
+            return worker.current_url || worker.final?.final_url || probe.url || 'No URL captured.';
+        },
+
+        testWorkerState() {
+            const worker = this.testResult?.data?.instagram_status?.data?.worker || {};
+            const probe = this.testResult?.data?.instagram_status?.data?.probe || {};
+            return [worker.last_event, worker.last_error, probe.title].filter(Boolean).join(' · ') || 'No worker state captured.';
+        },
+
+        testAccountLabel() {
+            const account = this.selectedAccount();
+            if (!account) return 'No saved account selected';
+            return account.label + (account.instagram_username ? ' · ' + account.instagram_username : '');
         },
     };
 }

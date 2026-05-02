@@ -64,11 +64,14 @@ class InstagramAccountSessionService
                 'wait_ms' => 2500,
             ],
             [
-                'type' => 'click_if_exists',
-                'label' => 'allow_cookies',
-                'selector' => 'button:has-text("Allow all cookies")',
-                'timeout_ms' => 4000,
-                'wait_ms' => 1000,
+                'type' => 'evaluate',
+                'label' => 'dismiss_cookies',
+                'code' => self::dismissCookieBannerJs(),
+            ],
+            [
+                'type' => 'wait_ms',
+                'label' => 'settle_after_cookies',
+                'ms' => 1000,
             ],
             [
                 'type' => 'evaluate',
@@ -77,7 +80,7 @@ class InstagramAccountSessionService
             ],
         ], [
             'final' => [
-                'include_screenshot' => true,
+                'include_screenshot' => false,
             ],
         ]);
 
@@ -129,46 +132,38 @@ class InstagramAccountSessionService
                 'wait_ms' => 2500,
             ],
             [
-                'type' => 'click_if_exists',
-                'label' => 'allow_cookies',
-                'selector' => 'button:has-text("Allow all cookies")',
-                'timeout_ms' => 4000,
-                'wait_ms' => 1000,
+                'type' => 'evaluate',
+                'label' => 'dismiss_cookies',
+                'code' => self::dismissCookieBannerJs(),
             ],
             [
-                'type' => 'wait_for_selector',
-                'label' => 'wait_username',
-                'selector' => 'input[name="username"]',
-                'state' => 'visible',
-                'timeout_ms' => 15000,
+                'type' => 'wait_ms',
+                'label' => 'settle_after_cookies',
+                'ms' => 1200,
             ],
             [
-                'type' => 'fill',
-                'label' => 'fill_username',
-                'selector' => 'input[name="username"]',
-                'value' => $username,
-                'timeout_ms' => 15000,
+                'type' => 'evaluate',
+                'label' => 'submit_login_form',
+                'code' => self::submitLoginFormJs(),
+                'args' => [
+                    'username' => $username,
+                    'password' => $password,
+                ],
             ],
             [
-                'type' => 'fill',
-                'label' => 'fill_password',
-                'selector' => 'input[name="password"]',
-                'value' => $password,
-                'timeout_ms' => 15000,
+                'type' => 'wait_ms',
+                'label' => 'settle_after_submit',
+                'ms' => 6500,
             ],
             [
-                'type' => 'click',
-                'label' => 'submit_login',
-                'selector' => 'button[type="submit"]',
-                'timeout_ms' => 15000,
-                'wait_ms' => 5000,
+                'type' => 'evaluate',
+                'label' => 'dismiss_post_login_prompts',
+                'code' => self::dismissPostLoginPromptsJs(),
             ],
             [
-                'type' => 'click_if_exists',
-                'label' => 'dismiss_save_info',
-                'selector' => 'button:has-text("Not now"), button:has-text("Not Now")',
-                'timeout_ms' => 4000,
-                'wait_ms' => 1500,
+                'type' => 'wait_ms',
+                'label' => 'settle_after_prompts',
+                'ms' => 1500,
             ],
             [
                 'type' => 'evaluate',
@@ -177,7 +172,7 @@ class InstagramAccountSessionService
             ],
         ], [
             'final' => [
-                'include_screenshot' => true,
+                'include_screenshot' => false,
             ],
         ]);
 
@@ -235,7 +230,15 @@ class InstagramAccountSessionService
         return <<<'JS'
 const bodyText = (document.body?.innerText || '').trim();
 const bodyLower = bodyText.toLowerCase();
-const loginForm = Boolean(document.querySelector('input[name="username"], input[name="password"]'));
+const isVisible = (node) => {
+  if (!node) return false;
+  const style = window.getComputedStyle(node);
+  return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
+};
+const inputs = Array.from(document.querySelectorAll('input')).filter(isVisible);
+const visibleTextInputs = inputs.filter((node) => ['text', 'email', 'tel', 'search', ''].includes((node.type || '').toLowerCase()));
+const visiblePasswordInputs = inputs.filter((node) => (node.type || '').toLowerCase() === 'password');
+const loginForm = Boolean(document.querySelector('input[name="username"], input[name="password"]')) || (visibleTextInputs.length > 0 && visiblePasswordInputs.length > 0);
 const challenge = /challenge|checkpoint|two_factor|suspended/i.test(`${location.pathname} ${bodyText}`);
 const alerts = Array.from(document.querySelectorAll('[role="alert"]')).map((node) => (node.innerText || '').trim()).filter(Boolean);
 const visibleButtons = Array.from(document.querySelectorAll('button')).map((node) => (node.innerText || '').trim()).filter(Boolean).slice(0, 20);
@@ -270,9 +273,134 @@ return {
   auth_indicator_count: authenticatedMarkers.length,
   strong_nav_count: strongNavMatches.length,
   strong_nav_matches: strongNavMatches,
+  visible_text_inputs: visibleTextInputs.map((node) => node.getAttribute('aria-label') || node.getAttribute('placeholder') || node.name || 'text-input').slice(0, 8),
+  visible_password_inputs: visiblePasswordInputs.length,
   body_excerpt: bodyText.slice(0, 1200),
   connected,
 };
+JS;
+    }
+
+    public static function dismissCookieBannerJs(): string
+    {
+        return <<<'JS'
+(() => {
+  const matches = [
+    'Allow all cookies',
+    'Allow all',
+    'Accept all',
+    'Allow essential and optional cookies',
+    'Accept cookies',
+  ];
+  const buttons = Array.from(document.querySelectorAll('button'));
+  const target = buttons.find((button) => {
+    const text = (button.innerText || '').trim().toLowerCase();
+    return matches.some((candidate) => text.includes(candidate.toLowerCase()));
+  });
+  if (target) {
+    target.click();
+    return { clicked: true, text: (target.innerText || '').trim() };
+  }
+  return { clicked: false };
+})()
+JS;
+    }
+
+    public static function dismissPostLoginPromptsJs(): string
+    {
+        return <<<'JS'
+(() => {
+  const matches = [
+    'Not now',
+    'Not Now',
+    'Cancel',
+    'Skip',
+  ];
+  const buttons = Array.from(document.querySelectorAll('button'));
+  const clicked = [];
+  for (const button of buttons) {
+    const text = (button.innerText || '').trim();
+    if (!text) continue;
+    if (matches.some((candidate) => text.toLowerCase() === candidate.toLowerCase())) {
+      button.click();
+      clicked.push(text);
+    }
+  }
+  return { clicked };
+})()
+JS;
+    }
+
+    public static function submitLoginFormJs(): string
+    {
+        return <<<'JS'
+((args) => {
+  const isVisible = (node) => {
+    if (!node) return false;
+    const style = window.getComputedStyle(node);
+    return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
+  };
+
+  const setNativeValue = (node, value) => {
+    const prototype = Object.getPrototypeOf(node);
+    const descriptor = Object.getOwnPropertyDescriptor(prototype, 'value');
+    if (descriptor?.set) {
+      descriptor.set.call(node, value);
+    } else {
+      node.value = value;
+    }
+    node.dispatchEvent(new Event('input', { bubbles: true }));
+    node.dispatchEvent(new Event('change', { bubbles: true }));
+  };
+
+  const allInputs = Array.from(document.querySelectorAll('input')).filter(isVisible).filter((node) => !node.disabled);
+  const usernameInput = document.querySelector('input[name="username"]')
+    || allInputs.find((node) => ['text', 'email', 'tel', 'search', ''].includes((node.type || '').toLowerCase()));
+  const passwordInput = document.querySelector('input[name="password"]')
+    || allInputs.find((node) => (node.type || '').toLowerCase() === 'password');
+
+  const summary = {
+    found_username: Boolean(usernameInput),
+    found_password: Boolean(passwordInput),
+    visible_inputs: allInputs.map((node) => ({
+      type: node.type || '',
+      name: node.name || '',
+      aria: node.getAttribute('aria-label') || '',
+      placeholder: node.getAttribute('placeholder') || '',
+    })).slice(0, 10),
+    submitted: false,
+  };
+
+  if (!usernameInput || !passwordInput) {
+    summary.reason = 'Could not find visible Instagram login inputs.';
+    return summary;
+  }
+
+  setNativeValue(usernameInput, String(args?.username || ''));
+  setNativeValue(passwordInput, String(args?.password || ''));
+
+  const buttons = Array.from(document.querySelectorAll('button')).filter(isVisible).filter((node) => !node.disabled);
+  const submitButton = document.querySelector('button[type="submit"]')
+    || buttons.find((node) => /log in|login|sign in/i.test((node.innerText || '').trim()));
+
+  if (submitButton) {
+    submitButton.click();
+    summary.submitted = true;
+    summary.submit_text = (submitButton.innerText || '').trim();
+  } else if (usernameInput.form) {
+    if (typeof usernameInput.form.requestSubmit === 'function') {
+      usernameInput.form.requestSubmit();
+    } else {
+      usernameInput.form.submit();
+    }
+    summary.submitted = true;
+    summary.submit_text = 'form_submit';
+  } else {
+    summary.reason = 'Login inputs were found, but no submit button or form was available.';
+  }
+
+  return summary;
+})(args)
 JS;
     }
 
@@ -287,6 +415,7 @@ JS;
         $strongNavCount = (int) ($probe['strong_nav_count'] ?? 0);
         $alerts = $probe['alerts'] ?? [];
         $connected = $probeConnected && !$loginForm && !$challenge && !$loginCopyDetected && $strongNavCount > 0;
+        $workerDetail = trim((string) ($result['detail'] ?? ''));
         $detail = $connected
             ? 'The browser session is authenticated and reached Instagram without a login form.'
             : ($challenge
@@ -297,6 +426,10 @@ JS;
 
         if (!$connected && !empty($alerts)) {
             $detail .= ' Alerts: ' . implode(' | ', array_slice($alerts, 0, 3));
+        }
+
+        if (!$connected && $workerDetail !== '' && !str_contains($detail, $workerDetail)) {
+            $detail .= ' Worker detail: ' . $workerDetail;
         }
 
         return [

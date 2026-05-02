@@ -2,6 +2,7 @@
 
 namespace hexa_package_instagram\Domains\Accounts\Http\Controllers;
 
+use hexa_core\Models\ActivityLog;
 use hexa_package_browser_worker\Contracts\BrowserWorkerBridgeContract;
 use hexa_package_instagram\Domains\Config\InstagramConfigRepository;
 use hexa_package_instagram\Services\InstagramAccountSessionService;
@@ -40,6 +41,12 @@ class InstagramAccountsController extends Controller
             $sessions->storePassword($validated['profile'], $validated['password']);
         }
 
+        ActivityLog::log('instagram', 'account_save', 'Saved Instagram account profile: ' . $validated['label'], [
+            'profile' => $config->resolveProfile($validated['profile']),
+            'instagram_username' => $validated['instagram_username'],
+            'set_active' => (bool) ($validated['set_active'] ?? false),
+        ]);
+
         return response()->json([
             'success' => true,
             'message' => 'Instagram account profile saved.',
@@ -55,6 +62,10 @@ class InstagramAccountsController extends Controller
         ]);
 
         $settings = $config->setActiveProfile($validated['profile']);
+
+        ActivityLog::log('instagram', 'account_activate', 'Activated Instagram account profile: ' . $validated['profile'], [
+            'profile' => $config->resolveProfile($validated['profile']),
+        ]);
 
         return response()->json([
             'success' => true,
@@ -79,7 +90,17 @@ class InstagramAccountsController extends Controller
             'profile' => ['nullable', 'string', 'max:80', 'regex:/^[A-Za-z0-9._-]+$/'],
         ]);
 
-        return response()->json($sessions->login($config->resolveProfile($validated['profile'] ?? null)));
+        $profile = $config->resolveProfile($validated['profile'] ?? null);
+        $result = $sessions->login($profile);
+
+        ActivityLog::log('instagram', 'account_login', ((bool) ($result['success'] ?? false) ? 'Ran' : 'Failed') . ' Instagram login for profile: ' . $profile, [
+            'profile' => $profile,
+            'success' => (bool) ($result['success'] ?? false),
+            'message' => $result['message'] ?? null,
+            'detail' => $result['detail'] ?? null,
+        ]);
+
+        return response()->json($result);
     }
 
     public function logout(Request $request, InstagramConfigRepository $config, InstagramAccountSessionService $sessions): JsonResponse
@@ -88,7 +109,15 @@ class InstagramAccountsController extends Controller
             'profile' => ['nullable', 'string', 'max:80', 'regex:/^[A-Za-z0-9._-]+$/'],
         ]);
 
-        return response()->json($sessions->logout($config->resolveProfile($validated['profile'] ?? null)));
+        $profile = $config->resolveProfile($validated['profile'] ?? null);
+        $result = $sessions->logout($profile);
+
+        ActivityLog::log('instagram', 'account_logout', 'Logged out Instagram browser profile: ' . $profile, [
+            'profile' => $profile,
+            'success' => (bool) ($result['success'] ?? false),
+        ]);
+
+        return response()->json($result);
     }
 
     public function destroy(Request $request, InstagramConfigRepository $config, InstagramAccountSessionService $sessions, BrowserWorkerBridgeContract $browser): JsonResponse
@@ -101,6 +130,10 @@ class InstagramAccountsController extends Controller
         $browser->deleteProfile($profile);
         $sessions->deletePassword($profile);
         $settings = $config->deleteAccount($profile);
+
+        ActivityLog::log('instagram', 'account_delete', 'Removed Instagram account profile: ' . $profile, [
+            'profile' => $profile,
+        ]);
 
         return response()->json([
             'success' => true,
