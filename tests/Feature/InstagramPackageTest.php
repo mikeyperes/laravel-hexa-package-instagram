@@ -456,6 +456,95 @@ class InstagramPackageTest extends TestCase
         $this->assertStringContainsString('redirected back to the Instagram login flow', $result['detail']);
     }
 
+    public function test_story_scan_fails_cleanly_when_instagram_requires_whatsapp_code_verification(): void
+    {
+        app()->instance(BrowserWorkerBridgeContract::class, new class implements BrowserWorkerBridgeContract {
+            public function health(): array
+            {
+                return ['success' => true];
+            }
+
+            public function integrityTest(?string $profile = null): array
+            {
+                return ['success' => true];
+            }
+
+            public function status(?string $profile = null): array
+            {
+                return ['success' => true];
+            }
+
+            public function logs(int $limit = 100): array
+            {
+                return ['success' => true];
+            }
+
+            public function launchProfile(?string $profile = null): array
+            {
+                return ['success' => true];
+            }
+
+            public function closeProfile(?string $profile = null): array
+            {
+                return ['success' => true];
+            }
+
+            public function logoutProfile(?string $profile = null): array
+            {
+                return ['success' => true];
+            }
+
+            public function deleteProfile(?string $profile = null): array
+            {
+                return ['success' => true];
+            }
+
+            public function pageHtml(?string $profile, string $url, array $options = []): array
+            {
+                return ['success' => true];
+            }
+
+            public function pageText(?string $profile, string $url, array $options = []): array
+            {
+                return ['success' => true];
+            }
+
+            public function pageScreenshot(?string $profile, string $url, array $options = []): array
+            {
+                return ['success' => true];
+            }
+
+            public function runAutomation(?string $profile, array $steps, array $options = []): array
+            {
+                return [
+                    'success' => false,
+                    'message' => 'Automation failed on open_story.',
+                    'status_code' => 200,
+                    'data' => [
+                        'results' => [
+                            ['label' => 'extract_story', 'result' => [
+                                'url' => 'https://www.instagram.com/auth_platform/codeentry/',
+                                'body_excerpt' => 'Check your WhatsApp messages Enter the code we sent to your WhatsApp account at +1 ***-***-**71. Continue Try another way',
+                                'image_urls' => [],
+                                'video_urls' => [],
+                                'visible_buttons' => ['Continue', 'Try another way'],
+                            ]],
+                        ],
+                        'final' => [
+                            'final_url' => 'https://www.instagram.com/auth_platform/codeentry/',
+                        ],
+                    ],
+                ];
+            }
+        });
+
+        $result = app(InstagramScraperService::class)->storyScan('jpn-miami', 'miamijpn');
+
+        $this->assertFalse($result['success']);
+        $this->assertSame('Instagram story scan requires a connected account.', $result['message']);
+        $this->assertStringContainsString('redirected back to the Instagram login flow', $result['detail']);
+    }
+
     public function test_account_routes_save_and_activate_multiple_profiles(): void
     {
         $this->withoutMiddleware();

@@ -241,9 +241,15 @@ JS;
             return true;
         }
 
+        if (str_contains($finalUrl, '/auth_platform/codeentry')) {
+            return true;
+        }
+
         return str_contains($bodyExcerpt, 'log into instagram')
             || str_contains($bodyExcerpt, 'log in to instagram')
             || str_contains($bodyExcerpt, 'mobile number, username or email')
-            || str_contains($bodyExcerpt, 'create new account');
+            || str_contains($bodyExcerpt, 'create new account')
+            || str_contains($bodyExcerpt, 'check your whatsapp messages')
+            || str_contains($bodyExcerpt, 'enter the code we sent to your whatsapp account');
     }
 }
