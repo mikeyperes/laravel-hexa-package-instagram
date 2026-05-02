@@ -239,7 +239,9 @@ const inputs = Array.from(document.querySelectorAll('input')).filter(isVisible);
 const visibleTextInputs = inputs.filter((node) => ['text', 'email', 'tel', 'search', ''].includes((node.type || '').toLowerCase()));
 const visiblePasswordInputs = inputs.filter((node) => (node.type || '').toLowerCase() === 'password');
 const loginForm = Boolean(document.querySelector('input[name="username"], input[name="password"]')) || (visibleTextInputs.length > 0 && visiblePasswordInputs.length > 0);
-const challenge = /challenge|checkpoint|two_factor|suspended/i.test(`${location.pathname} ${bodyText}`);
+const verificationRequired = /\/auth_platform\/codeentry/i.test(location.pathname)
+  || /check your whatsapp messages|enter the code we sent to your whatsapp account|try another way/i.test(bodyLower);
+const challenge = verificationRequired || /challenge|checkpoint|two_factor|suspended/i.test(`${location.pathname} ${bodyText}`);
 const alerts = Array.from(document.querySelectorAll('[role="alert"]')).map((node) => (node.innerText || '').trim()).filter(Boolean);
 const visibleButtons = Array.from(document.querySelectorAll('button')).map((node) => (node.innerText || '').trim()).filter(Boolean).slice(0, 20);
 const avatarLinks = Array.from(document.querySelectorAll('a[href]')).map((node) => node.getAttribute('href') || '').filter(Boolean);
@@ -265,6 +267,7 @@ return {
   path: location.pathname,
   title: document.title,
   login_form: loginForm,
+  verification_required: verificationRequired,
   challenge,
   login_copy_detected: loginCopyDetected,
   alerts,
@@ -410,6 +413,7 @@ JS;
 
         $probeConnected = (bool) ($probe['connected'] ?? false);
         $loginForm = (bool) ($probe['login_form'] ?? false);
+        $verificationRequired = (bool) ($probe['verification_required'] ?? false);
         $challenge = (bool) ($probe['challenge'] ?? false);
         $loginCopyDetected = (bool) ($probe['login_copy_detected'] ?? false);
         $strongNavCount = (int) ($probe['strong_nav_count'] ?? 0);
@@ -418,11 +422,13 @@ JS;
         $workerDetail = trim((string) ($result['detail'] ?? ''));
         $detail = $connected
             ? 'The browser session is authenticated and reached Instagram without a login form.'
-            : ($challenge
+            : ($verificationRequired
+                ? 'Instagram accepted the login but is waiting for the verification code it sent to the linked WhatsApp number.'
+                : ($challenge
                 ? 'Instagram returned a challenge/checkpoint state for this browser profile.'
                 : (($loginForm || $loginCopyDetected)
                     ? 'Instagram still shows the login form for this browser profile.'
-                    : 'Instagram did not confirm an authenticated session for this profile.'));
+                    : 'Instagram did not confirm an authenticated session for this profile.')));
 
         if (!$connected && !empty($alerts)) {
             $detail .= ' Alerts: ' . implode(' | ', array_slice($alerts, 0, 3));
@@ -441,6 +447,7 @@ JS;
                 'profile' => $profile,
                 'connected' => $connected,
                 'login_form' => $loginForm,
+                'verification_required' => $verificationRequired,
                 'challenge' => $challenge,
                 'probe' => $probe,
                 'worker' => $result['data'] ?? [],
