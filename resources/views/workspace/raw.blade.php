@@ -81,6 +81,27 @@
         </template>
     </div>
 
+    <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+        <div class="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+                <h2 class="text-lg font-semibold text-gray-900">Raw action history</h2>
+                <p class="mt-1 text-sm text-gray-500">Every status check, profile scan, story pull, and post import is saved here so the proof survives reloads.</p>
+            </div>
+            <a href="{{ route('instagram.raw') }}#raw-history" class="inline-flex items-center px-4 py-2 bg-white border border-gray-300 text-sm font-medium rounded-lg text-gray-700 hover:bg-gray-50">Open proof link</a>
+        </div>
+
+        <div id="raw-history">
+            <x-hexa-log-viewer
+                title="Instagram Raw History"
+                log-var="historyLog"
+                slug="instagram-raw-history"
+                theme="light"
+                :persist="true"
+                :collapsible="true"
+                :start-collapsed="false" />
+        </div>
+    </div>
+
     <div class="grid gap-6 xl:grid-cols-2">
         <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
             <div>
@@ -102,6 +123,21 @@
                     </button>
                 </div>
             </div>
+            <template x-if="profilePosts().length">
+                <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 space-y-3">
+                    <div class="text-sm font-semibold text-emerald-900">Recent posts found</div>
+                    <div class="flex flex-wrap gap-2">
+                        <template x-for="post in profilePosts()" :key="post">
+                            <button type="button"
+                                    @click="usePostUrl(post)"
+                                    class="inline-flex items-center px-3 py-1.5 rounded-lg border border-emerald-300 bg-white text-sm font-medium text-emerald-800 hover:bg-emerald-100">
+                                <span class="truncate max-w-[24rem]" x-text="post"></span>
+                            </button>
+                        </template>
+                    </div>
+                    <p class="text-xs text-emerald-800">Click a post to send it straight into the post-import tool below.</p>
+                </div>
+            </template>
             <div class="rounded-xl border border-slate-200 bg-slate-950 text-slate-100 p-4 text-xs font-mono min-h-[16rem] whitespace-pre-wrap" x-text="pretty(profilePayload)"></div>
         </div>
 
@@ -121,6 +157,19 @@
                     </button>
                 </div>
             </div>
+            <template x-if="storyMedia().length">
+                <div class="rounded-xl border border-indigo-200 bg-indigo-50 p-4 space-y-3">
+                    <div class="text-sm font-semibold text-indigo-900">Retrieved story media</div>
+                    <div class="space-y-2">
+                        <template x-for="item in storyMedia()" :key="item.url">
+                            <div class="rounded-lg border border-indigo-200 bg-white px-3 py-2">
+                                <div class="text-xs uppercase tracking-wide text-indigo-700" x-text="item.type"></div>
+                                <a :href="item.url" target="_blank" rel="noopener" class="mt-1 block text-sm font-medium text-blue-700 underline break-all" x-text="item.url"></a>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </template>
             <div class="rounded-xl border border-slate-200 bg-slate-950 text-slate-100 p-4 text-xs font-mono min-h-[16rem] whitespace-pre-wrap" x-text="pretty(storyPayload)"></div>
         </div>
     </div>
@@ -144,6 +193,29 @@
                     <span x-text="loading.importPost ? 'Importing...' : 'Run post import'"></span>
                 </button>
             </div>
+            <template x-if="importSummary().title || importSummary().caption">
+                <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
+                    <div class="text-sm font-semibold text-amber-900">Retrieved post summary</div>
+                    <template x-if="importSummary().title">
+                        <div>
+                            <div class="text-xs uppercase tracking-wide text-amber-700">Title</div>
+                            <div class="mt-1 text-sm font-medium text-gray-900" x-text="importSummary().title"></div>
+                        </div>
+                    </template>
+                    <template x-if="importSummary().caption">
+                        <div>
+                            <div class="text-xs uppercase tracking-wide text-amber-700">Caption</div>
+                            <div class="mt-1 text-sm text-gray-900 whitespace-pre-wrap" x-text="importSummary().caption"></div>
+                        </div>
+                    </template>
+                    <template x-if="importSummary().image_url">
+                        <div>
+                            <div class="text-xs uppercase tracking-wide text-amber-700">Image URL</div>
+                            <a :href="importSummary().image_url" target="_blank" rel="noopener" class="mt-1 block text-sm font-medium text-blue-700 underline break-all" x-text="importSummary().image_url"></a>
+                        </div>
+                    </template>
+                </div>
+            </template>
             <div class="rounded-xl border border-slate-200 bg-slate-950 text-slate-100 p-4 text-xs font-mono min-h-[18rem] whitespace-pre-wrap" x-text="pretty(importPayload)"></div>
         </div>
 
@@ -164,6 +236,7 @@ function instagramRawWorkspace() {
         accounts: @json($status['accounts']),
         profile: @json($status['active_profile']),
         activeAccount: @json($status['active_account']),
+        historyLog: @json($status['raw_history'] ?? []),
         loading: {
             status: false,
             integrity: false,
@@ -204,6 +277,11 @@ function instagramRawWorkspace() {
             this.setActiveAccountFromProfile();
             this.loadStatus();
             this.loadLogs();
+            if (this.historyLog.length === 0) {
+                this.logHistory('info', 'Instagram raw workspace opened.', {
+                    profile: this.profile,
+                });
+            }
         },
 
         csrfToken() {
@@ -220,6 +298,42 @@ function instagramRawWorkspace() {
 
         setActiveAccountFromProfile() {
             this.activeAccount = this.accounts.find((account) => account.profile === this.profile) || null;
+        },
+
+        now() {
+            return new Date().toLocaleTimeString([], { hour12: false });
+        },
+
+        logHistory(type, message, detail = null) {
+            this.historyLog.push({
+                type,
+                message,
+                detail,
+                time: this.now(),
+            });
+        },
+
+        profilePosts() {
+            return this.profilePayload?.data?.scan?.post_links || [];
+        },
+
+        storyMedia() {
+            const images = (this.storyPayload?.data?.scan?.image_urls || []).map((url) => ({ type: 'image', url }));
+            const videos = (this.storyPayload?.data?.scan?.video_urls || []).map((url) => ({ type: 'video', url }));
+            return [...images, ...videos];
+        },
+
+        importSummary() {
+            return {
+                title: this.importPayload?.data?.title || '',
+                caption: this.importPayload?.data?.caption || '',
+                image_url: this.importPayload?.data?.image_url || '',
+            };
+        },
+
+        usePostUrl(url) {
+            this.importForm.url = url;
+            this.logHistory('info', 'Selected Instagram post for import.', { url });
         },
 
         async request(url, options = {}) {
@@ -242,6 +356,12 @@ function instagramRawWorkspace() {
                 url.searchParams.set('profile', this.profile || 'instagram-main');
                 const { data } = await this.request(url);
                 this.statusPayload = data;
+                this.logHistory(data.success ? 'success' : 'warning', 'Refreshed Instagram raw status.', {
+                    profile: this.profile,
+                    connected: data?.data?.connected ?? null,
+                    verification_required: data?.data?.verification_required ?? null,
+                    current_url: data?.data?.probe?.url ?? null,
+                });
             } finally {
                 this.loading.status = false;
             }
@@ -255,6 +375,11 @@ function instagramRawWorkspace() {
                 const { data } = await this.request(url);
                 this.integrityPayload = data;
                 this.statusPayload = data.data?.instagram_status || this.statusPayload;
+                this.logHistory(data.success ? 'success' : 'warning', 'Ran Instagram raw integrity test.', {
+                    profile: this.profile,
+                    connected: data?.data?.connected ?? null,
+                    detail: data?.detail || null,
+                });
             } finally {
                 this.loading.integrity = false;
             }
@@ -285,6 +410,12 @@ function instagramRawWorkspace() {
                     }),
                 });
                 this.profilePayload = data;
+                this.logHistory(data.success ? 'success' : 'warning', 'Ran Instagram profile scan.', {
+                    profile: this.profile,
+                    instagram_username: this.profileForm.instagram_username,
+                    post_count: data?.data?.scan?.post_links?.length || 0,
+                    title: data?.data?.scan?.title || null,
+                });
             } finally {
                 this.loading.profileScan = false;
             }
@@ -302,6 +433,12 @@ function instagramRawWorkspace() {
                     }),
                 });
                 this.storyPayload = data;
+                this.logHistory(data.success ? 'success' : 'warning', 'Ran Instagram story pull.', {
+                    profile: this.profile,
+                    instagram_username: this.storyForm.instagram_username,
+                    image_count: data?.data?.scan?.image_urls?.length || 0,
+                    video_count: data?.data?.scan?.video_urls?.length || 0,
+                });
             } finally {
                 this.loading.storyScan = false;
             }
@@ -316,6 +453,12 @@ function instagramRawWorkspace() {
                     body: JSON.stringify(this.importForm),
                 });
                 this.importPayload = data;
+                this.logHistory(data.success ? 'success' : 'warning', 'Ran Instagram post import.', {
+                    url: this.importForm.url,
+                    method_used: data?.data?.method_used || null,
+                    title: data?.data?.title || null,
+                    caption_length: (data?.data?.caption || '').length,
+                });
             } finally {
                 this.loading.importPost = false;
             }
