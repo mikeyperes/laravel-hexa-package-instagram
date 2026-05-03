@@ -342,11 +342,11 @@ JS;
             return '';
         }
 
-        if (preg_match('#https?://(www\.)?instagram\.com/([^/]+)/(p|reel|tv)/([^/?#]+)/?#i', $url, $match)) {
+        if (preg_match('~https?://(www\.)?instagram\.com/([^/]+)/(p|reel|tv)/([^/?#]+)/?$~i', $url, $match)) {
             return 'https://www.instagram.com/' . strtolower($match[3]) . '/' . $match[4] . '/';
         }
 
-        if (preg_match('#https?://(www\.)?instagram\.com/(p|reel|tv)/([^/?#]+)/?#i', $url, $match)) {
+        if (preg_match('~https?://(www\.)?instagram\.com/(p|reel|tv)/([^/?#]+)/?$~i', $url, $match)) {
             return 'https://www.instagram.com/' . strtolower($match[2]) . '/' . $match[3] . '/';
         }
 
