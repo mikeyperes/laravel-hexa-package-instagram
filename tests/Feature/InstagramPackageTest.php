@@ -1014,4 +1014,13 @@ class InstagramPackageTest extends TestCase
             ->assertSee('Raw action history')
             ->assertSee('Instagram Raw History');
     }
+
+    public function test_profile_probe_captures_profile_scoped_post_links(): void
+    {
+        $probe = \hexa_package_instagram\Services\InstagramScraperService::profileProbeJs();
+
+        $this->assertStringContainsString("href.includes('/p/')", $probe);
+        $this->assertStringContainsString("href.includes('/reel/')", $probe);
+        $this->assertStringContainsString("href.includes('/tv/')", $probe);
+    }
 }

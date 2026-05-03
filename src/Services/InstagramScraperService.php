@@ -161,9 +161,13 @@ class InstagramScraperService
         return <<<'JS'
 const limit = Math.max(1, Math.min(Number(args?.limit || 12), 30));
 const bodyText = (document.body?.innerText || '').trim();
-const postLinks = Array.from(document.querySelectorAll('a[href^="/p/"], a[href^="/reel/"]'))
+const postLinks = Array.from(document.querySelectorAll('a[href]'))
   .map((node) => node.getAttribute('href'))
-  .filter(Boolean)
+  .filter((href) => typeof href === 'string' && (
+    href.includes('/p/')
+    || href.includes('/reel/')
+    || href.includes('/tv/')
+  ))
   .map((href) => href.startsWith('http') ? href : `https://www.instagram.com${href}`)
   .filter((value, index, array) => array.indexOf(value) === index)
   .slice(0, limit);
