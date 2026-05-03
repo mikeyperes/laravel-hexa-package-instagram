@@ -27,5 +27,6 @@ Route::middleware(['web', 'auth', 'locked', 'system_lock', 'two_factor', 'role']
     Route::get('/instagram/logs', [InstagramWorkspaceController::class, 'logs'])->name('instagram.logs');
     Route::post('/instagram/profile-scan', [InstagramWorkspaceController::class, 'profileScan'])->name('instagram.profile-scan');
     Route::post('/instagram/story-scan', [InstagramWorkspaceController::class, 'storyScan'])->name('instagram.story-scan');
+    Route::post('/instagram/post-scan', [InstagramWorkspaceController::class, 'postScan'])->name('instagram.post-scan');
     Route::post('/instagram/import-post', [InstagramWorkspaceController::class, 'importPost'])->name('instagram.import-post');
 });

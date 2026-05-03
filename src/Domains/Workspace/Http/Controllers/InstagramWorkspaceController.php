@@ -102,6 +102,26 @@ class InstagramWorkspaceController extends Controller
         return response()->json($result);
     }
 
+    public function postScan(Request $request, InstagramConfigRepository $config, InstagramScraperService $scraper): JsonResponse
+    {
+        $validated = $request->validate([
+            'profile' => ['nullable', 'string', 'max:80', 'regex:/^[A-Za-z0-9._-]+$/'],
+            'url' => ['required', 'url', 'max:2000'],
+        ]);
+
+        $profile = $config->resolveProfile($validated['profile'] ?? null);
+        $result = $scraper->postScan(
+            $profile,
+            $validated['url']
+        );
+        $this->recordRawAction('raw_post_scan', $result, [
+            'profile' => $profile,
+            'url' => $validated['url'],
+        ]);
+
+        return response()->json($result);
+    }
+
     public function importPost(Request $request, InstagramScraperService $scraper): JsonResponse
     {
         $validated = $request->validate([
@@ -149,7 +169,7 @@ class InstagramWorkspaceController extends Controller
     {
         return ActivityLog::query()
             ->where('category', 'instagram')
-            ->whereIn('action', ['raw_status', 'raw_integrity', 'raw_profile_scan', 'raw_story_scan', 'raw_post_import'])
+            ->whereIn('action', ['raw_status', 'raw_integrity', 'raw_profile_scan', 'raw_story_scan', 'raw_post_scan', 'raw_post_import'])
             ->latest('id')
             ->limit(30)
             ->get()
@@ -197,6 +217,7 @@ class InstagramWorkspaceController extends Controller
             'raw_integrity' => 'Ran raw Instagram integrity test for profile: ' . ($payload['profile'] ?? 'unknown'),
             'raw_profile_scan' => 'Ran raw Instagram profile scan for @' . ($payload['instagram_username'] ?? 'unknown'),
             'raw_story_scan' => 'Ran raw Instagram story pull for @' . ($payload['instagram_username'] ?? 'unknown'),
+            'raw_post_scan' => 'Ran raw Instagram post scan for ' . Str::limit((string) ($payload['url'] ?? ''), 90),
             'raw_post_import' => 'Ran raw Instagram post import for ' . Str::limit((string) ($payload['url'] ?? ''), 90),
             default => 'Ran Instagram raw action.',
         };
@@ -210,6 +231,12 @@ class InstagramWorkspaceController extends Controller
                 'title' => data_get($result, 'data.scan.title'),
             ],
             'raw_story_scan' => [
+                'image_count' => count((array) data_get($result, 'data.scan.image_urls', [])),
+                'video_count' => count((array) data_get($result, 'data.scan.video_urls', [])),
+                'title' => data_get($result, 'data.scan.title'),
+            ],
+            'raw_post_scan' => [
+                'posted_at' => data_get($result, 'data.scan.posted_at'),
                 'image_count' => count((array) data_get($result, 'data.scan.image_urls', [])),
                 'video_count' => count((array) data_get($result, 'data.scan.video_urls', [])),
                 'title' => data_get($result, 'data.scan.title'),

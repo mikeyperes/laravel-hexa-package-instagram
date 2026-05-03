@@ -156,6 +156,74 @@ class InstagramScraperService
         ];
     }
 
+    public function postScan(?string $profile, string $url): array
+    {
+        $resolved = $this->config->resolveProfile($profile);
+        $normalizedUrl = $this->normalizePostUrl($url);
+
+        if ($normalizedUrl === '') {
+            return $this->failure('Instagram post URL is required.', 'Provide a valid Instagram post URL before running the post scan.');
+        }
+
+        $result = $this->browser->runAutomation($resolved, [
+            [
+                'type' => 'goto',
+                'label' => 'open_post',
+                'url' => $normalizedUrl,
+                'wait_until' => 'domcontentloaded',
+                'timeout_ms' => 30000,
+                'wait_ms' => 3000,
+            ],
+            [
+                'type' => 'click_if_exists',
+                'label' => 'allow_cookies',
+                'selector' => 'button:has-text("Allow all cookies")',
+                'timeout_ms' => 4000,
+                'wait_ms' => 1000,
+            ],
+            [
+                'type' => 'evaluate',
+                'label' => 'extract_post',
+                'code' => self::postProbeJs(),
+            ],
+        ], [
+            'final' => [
+                'include_screenshot' => true,
+            ],
+        ]);
+
+        $probe = $this->resultByLabel($result, 'extract_post');
+        if ($this->isLoginRedirect($result, $probe)) {
+            return [
+                'success' => false,
+                'message' => 'Instagram post scan requires a connected account.',
+                'detail' => 'The browser worker was redirected back to the Instagram login flow instead of the requested post.',
+                'status_code' => (int) ($result['status_code'] ?? 0),
+                'data' => [
+                    'profile' => $resolved,
+                    'url' => $normalizedUrl,
+                    'scan' => $probe,
+                    'worker' => $result['data'] ?? [],
+                ],
+            ];
+        }
+
+        return [
+            'success' => (bool) ($result['success'] ?? false),
+            'message' => (bool) ($result['success'] ?? false) ? 'Instagram post scan completed.' : (string) ($result['message'] ?? 'Instagram post scan failed.'),
+            'detail' => (bool) ($result['success'] ?? false)
+                ? 'Rendered DOM data came from the authenticated Instagram post page.'
+                : (string) ($result['detail'] ?? ''),
+            'status_code' => (int) ($result['status_code'] ?? 0),
+            'data' => [
+                'profile' => $resolved,
+                'url' => $normalizedUrl,
+                'scan' => $probe,
+                'worker' => $result['data'] ?? [],
+            ],
+        ];
+    }
+
     public static function profileProbeJs(): string
     {
         return <<<'JS'
@@ -215,6 +283,39 @@ return {
 JS;
     }
 
+    public static function postProbeJs(): string
+    {
+        return <<<'JS'
+const bodyText = (document.body?.innerText || '').trim();
+const timeNode = document.querySelector('time');
+const imageUrls = Array.from(document.querySelectorAll('article img[src], img[src]'))
+  .map((node) => node.getAttribute('src'))
+  .filter(Boolean)
+  .filter((value, index, array) => array.indexOf(value) === index);
+const videoUrls = Array.from(document.querySelectorAll('article video, article video source, video, video source'))
+  .map((node) => node.currentSrc || node.getAttribute('src'))
+  .filter(Boolean)
+  .filter((value, index, array) => array.indexOf(value) === index);
+const captionBlocks = Array.from(document.querySelectorAll('h1, h2, ul h1, ul span, article h1, article span'))
+  .map((node) => (node.innerText || '').trim())
+  .filter(Boolean)
+  .filter((value, index, array) => array.indexOf(value) === index);
+const canonical = document.querySelector('link[rel="canonical"]')?.getAttribute('href') || '';
+
+return {
+  url: location.href,
+  canonical_url: canonical,
+  title: document.title,
+  posted_at: timeNode?.getAttribute('datetime') || '',
+  time_text: (timeNode?.innerText || '').trim(),
+  image_urls: imageUrls,
+  video_urls: videoUrls,
+  caption_blocks: captionBlocks.slice(0, 12),
+  body_excerpt: bodyText.slice(0, 3000),
+};
+JS;
+    }
+
     private function resultByLabel(array $result, string $label): array
     {
         foreach (($result['data']['results'] ?? []) as $step) {
@@ -224,6 +325,32 @@ JS;
         }
 
         return [];
+    }
+
+    private function normalizePostUrl(string $url): string
+    {
+        $url = trim($url);
+        if ($url === '') {
+            return '';
+        }
+
+        if (!preg_match('#^https?://#i', $url)) {
+            $url = 'https://' . ltrim($url, '/');
+        }
+
+        if (!preg_match('#^https?://(www\.)?instagram\.com/#i', $url)) {
+            return '';
+        }
+
+        if (preg_match('#https?://(www\.)?instagram\.com/([^/]+)/(p|reel|tv)/([^/?#]+)/?#i', $url, $match)) {
+            return 'https://www.instagram.com/' . strtolower($match[3]) . '/' . $match[4] . '/';
+        }
+
+        if (preg_match('#https?://(www\.)?instagram\.com/(p|reel|tv)/([^/?#]+)/?#i', $url, $match)) {
+            return 'https://www.instagram.com/' . strtolower($match[2]) . '/' . $match[3] . '/';
+        }
+
+        return rtrim($url, '/') . '/';
     }
 
     private function failure(string $message, string $detail): array
