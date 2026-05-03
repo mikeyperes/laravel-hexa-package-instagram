@@ -169,6 +169,7 @@ const postLinks = Array.from(document.querySelectorAll('a[href]'))
     || href.includes('/tv/')
   ))
   .map((href) => href.startsWith('http') ? href : `https://www.instagram.com${href}`)
+  .map((href) => href.replace(/https:\/\/www\.instagram\.com\/[^/]+\/(p|reel|tv)\//, 'https://www.instagram.com/$1/'))
   .filter((value, index, array) => array.indexOf(value) === index)
   .slice(0, limit);
 const media = Array.from(document.querySelectorAll('img[src]'))

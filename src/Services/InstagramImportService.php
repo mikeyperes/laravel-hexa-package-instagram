@@ -518,6 +518,10 @@ class InstagramImportService
             return null;
         }
         $path = (string) ($parts['path'] ?? '');
+        if (preg_match('#^/[^/]+/(p|reel|tv)/([^/]+)/?#', $path, $match)) {
+            $path = '/' . $match[1] . '/' . $match[2] . '/';
+        }
+
         if (!preg_match('#^/(p|reel|tv)/[^/]+/?#', $path)) {
             return null;
         }
