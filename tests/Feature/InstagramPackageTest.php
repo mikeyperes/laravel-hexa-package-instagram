@@ -344,6 +344,110 @@ class InstagramPackageTest extends TestCase
         $this->assertSame('Instagram still shows the login form for this browser profile.', $result['detail']);
     }
 
+    public function test_status_preserves_current_verification_screen_and_reports_email_code_requirement(): void
+    {
+        $repository = app(InstagramConfigRepository::class);
+        $repository->saveAccount('JPN Main', 'jpn-miami', 'miamijpn', true);
+
+        app()->instance(BrowserWorkerBridgeContract::class, new class implements BrowserWorkerBridgeContract {
+            public function health(): array
+            {
+                return ['success' => true, 'message' => 'Browser worker is reachable.', 'status_code' => 200];
+            }
+
+            public function integrityTest(?string $profile = null): array
+            {
+                return ['success' => true];
+            }
+
+            public function status(?string $profile = null): array
+            {
+                return [
+                    'success' => true,
+                    'data' => [
+                        'current_url' => 'https://www.instagram.com/auth_platform/codeentry/',
+                    ],
+                ];
+            }
+
+            public function logs(int $limit = 100): array
+            {
+                return ['success' => true];
+            }
+
+            public function launchProfile(?string $profile = null): array
+            {
+                return ['success' => true];
+            }
+
+            public function closeProfile(?string $profile = null): array
+            {
+                return ['success' => true];
+            }
+
+            public function logoutProfile(?string $profile = null): array
+            {
+                return ['success' => true];
+            }
+
+            public function deleteProfile(?string $profile = null): array
+            {
+                return ['success' => true];
+            }
+
+            public function pageHtml(?string $profile, string $url, array $options = []): array
+            {
+                return ['success' => true];
+            }
+
+            public function pageText(?string $profile, string $url, array $options = []): array
+            {
+                return ['success' => true];
+            }
+
+            public function pageScreenshot(?string $profile, string $url, array $options = []): array
+            {
+                return ['success' => true];
+            }
+
+            public function runAutomation(?string $profile, array $steps, array $options = []): array
+            {
+                return [
+                    'success' => true,
+                    'message' => 'Automation flow completed.',
+                    'status_code' => 200,
+                    'data' => [
+                        'results' => [
+                            ['label' => 'detect_login_state', 'result' => [
+                                'connected' => false,
+                                'login_form' => false,
+                                'verification_required' => true,
+                                'verification_channel' => 'email',
+                                'challenge' => true,
+                                'login_copy_detected' => false,
+                                'strong_nav_count' => 0,
+                                'alerts' => [],
+                                'body_excerpt' => 'Check your email Enter the code we sent to your email.',
+                            ]],
+                        ],
+                        'final' => [
+                            'final_url' => 'https://www.instagram.com/auth_platform/codeentry/',
+                        ],
+                    ],
+                ];
+            }
+        });
+
+        $result = app(InstagramAccountSessionService::class)->status('jpn-miami');
+
+        $this->assertTrue($result['success']);
+        $this->assertFalse($result['data']['connected']);
+        $this->assertTrue($result['data']['verification_required']);
+        $this->assertSame('email', $result['data']['verification_channel']);
+        $this->assertSame('Instagram account is not connected yet.', $result['message']);
+        $this->assertSame('Instagram accepted the saved credentials and is waiting for the verification code it sent by email.', $result['detail']);
+    }
+
     public function test_public_import_fallback_extracts_image_caption_and_title(): void
     {
         app()->instance(BrowserHttpService::class, new class extends BrowserHttpService {
@@ -558,6 +662,137 @@ class InstagramPackageTest extends TestCase
         $this->assertFalse($result['success']);
         $this->assertSame('Instagram story scan requires a connected account.', $result['message']);
         $this->assertStringContainsString('redirected back to the Instagram login flow', $result['detail']);
+    }
+
+    public function test_submit_verification_code_advances_attached_browser_session(): void
+    {
+        $repository = app(InstagramConfigRepository::class);
+        $repository->saveAccount('JPN Main', 'jpn-miami', 'miamijpn', true);
+
+        app()->instance(BrowserWorkerBridgeContract::class, new class implements BrowserWorkerBridgeContract {
+            private int $runCalls = 0;
+
+            public function health(): array
+            {
+                return ['success' => true];
+            }
+
+            public function integrityTest(?string $profile = null): array
+            {
+                return ['success' => true];
+            }
+
+            public function status(?string $profile = null): array
+            {
+                return [
+                    'success' => true,
+                    'data' => [
+                        'current_url' => 'https://www.instagram.com/auth_platform/codeentry/',
+                    ],
+                ];
+            }
+
+            public function logs(int $limit = 100): array
+            {
+                return ['success' => true];
+            }
+
+            public function launchProfile(?string $profile = null): array
+            {
+                return ['success' => true];
+            }
+
+            public function closeProfile(?string $profile = null): array
+            {
+                return ['success' => true];
+            }
+
+            public function logoutProfile(?string $profile = null): array
+            {
+                return ['success' => true];
+            }
+
+            public function deleteProfile(?string $profile = null): array
+            {
+                return ['success' => true];
+            }
+
+            public function pageHtml(?string $profile, string $url, array $options = []): array
+            {
+                return ['success' => true];
+            }
+
+            public function pageText(?string $profile, string $url, array $options = []): array
+            {
+                return ['success' => true];
+            }
+
+            public function pageScreenshot(?string $profile, string $url, array $options = []): array
+            {
+                return ['success' => true];
+            }
+
+            public function runAutomation(?string $profile, array $steps, array $options = []): array
+            {
+                $this->runCalls++;
+
+                if ($this->runCalls === 1) {
+                    return [
+                        'success' => true,
+                        'message' => 'Automation flow completed.',
+                        'status_code' => 200,
+                        'data' => [
+                            'results' => [
+                                ['label' => 'detect_login_state', 'result' => [
+                                    'connected' => false,
+                                    'login_form' => false,
+                                    'verification_required' => true,
+                                    'verification_channel' => 'email',
+                                    'challenge' => true,
+                                    'login_copy_detected' => false,
+                                    'strong_nav_count' => 0,
+                                    'alerts' => [],
+                                    'body_excerpt' => 'Check your email Enter the code we sent to your email.',
+                                ]],
+                            ],
+                            'final' => [
+                                'final_url' => 'https://www.instagram.com/auth_platform/codeentry/',
+                            ],
+                        ],
+                    ];
+                }
+
+                return [
+                    'success' => true,
+                    'message' => 'Automation flow completed.',
+                    'status_code' => 200,
+                    'data' => [
+                        'results' => [
+                            ['label' => 'detect_login_state', 'result' => [
+                                'connected' => true,
+                                'login_form' => false,
+                                'verification_required' => false,
+                                'verification_channel' => '',
+                                'challenge' => false,
+                                'login_copy_detected' => false,
+                                'strong_nav_count' => 3,
+                                'alerts' => [],
+                                'body_excerpt' => 'Instagram home',
+                            ]],
+                        ],
+                        'final' => [
+                            'final_url' => 'https://www.instagram.com/',
+                        ],
+                    ],
+                ];
+            }
+        });
+
+        $result = app(InstagramAccountSessionService::class)->submitVerificationCode('jpn-miami', '916724');
+
+        $this->assertTrue($result['success']);
+        $this->assertTrue($result['data']['connected']);
+        $this->assertSame('Instagram verification code submitted.', $result['message']);
     }
 
     public function test_account_routes_save_and_activate_multiple_profiles(): void

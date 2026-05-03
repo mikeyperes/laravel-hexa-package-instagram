@@ -134,11 +134,11 @@
                         </button>
                     </div>
 
-                    <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
-                        <div class="flex items-center justify-between gap-3 flex-wrap">
-                            <div>
-                                <div class="text-sm font-semibold text-slate-900">Latest browser proof</div>
-                                <div class="mt-1 text-xs text-slate-500" x-text="proofHeadline(@js($profile))"></div>
+                        <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+                            <div class="flex items-center justify-between gap-3 flex-wrap">
+                                <div>
+                                    <div class="text-sm font-semibold text-slate-900">Latest browser proof</div>
+                                    <div class="mt-1 text-xs text-slate-500" x-text="proofHeadline(@js($profile))"></div>
                             </div>
                             <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium"
                                   :class="proofBadgeClass(@js($profile))"
@@ -149,16 +149,35 @@
                             <div class="grid gap-3 md:grid-cols-2 text-sm">
                                 <div class="rounded-lg border border-slate-200 bg-white px-4 py-3">
                                     <div class="text-xs uppercase tracking-wide text-slate-500">Current URL</div>
-                                    <div class="mt-1 text-slate-900 break-all" x-text="proofUrl(@js($profile))"></div>
+                                    <div class="mt-1">
+                                        <a :href="proofUrl(@js($profile))" target="_blank" rel="noopener" class="text-blue-700 underline break-all" x-text="proofUrl(@js($profile))"></a>
+                                    </div>
                                 </div>
                                 <div class="rounded-lg border border-slate-200 bg-white px-4 py-3">
                                     <div class="text-xs uppercase tracking-wide text-slate-500">Worker state</div>
                                     <div class="mt-1 text-slate-900" x-text="proofState(@js($profile))"></div>
                                 </div>
                                 <div class="rounded-lg border border-slate-200 bg-white px-4 py-3 md:col-span-2">
-                                    <div class="text-xs uppercase tracking-wide text-slate-500">Why</div>
+                                    <div class="text-xs uppercase tracking-wide text-slate-500">What happened</div>
                                     <div class="mt-1 font-medium text-slate-900" x-text="statusDetail(@js($profile))"></div>
+                                    <div class="mt-2 text-sm text-slate-700" x-text="proofNextStep(@js($profile))"></div>
                                     <div class="mt-2 text-xs text-slate-500" x-text="proofSecondary(@js($profile))"></div>
+                                </div>
+                            </div>
+                        </template>
+
+                        <template x-if="needsVerificationCode(@js($profile))">
+                            <div class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-4 space-y-3">
+                                <div class="text-sm font-semibold text-amber-900" x-text="verificationHeading(@js($profile))"></div>
+                                <p class="text-sm text-amber-800">Saved credentials were accepted. Enter the verification code here to keep the browser session moving inside Hexa instead of getting stuck on Instagram.</p>
+                                <div class="flex items-end gap-3 flex-wrap">
+                                    <div class="min-w-[14rem] flex-1">
+                                        <label class="block text-sm font-medium text-amber-900 mb-1">Verification code</label>
+                                        <input type="text" inputmode="numeric" x-model="verificationCodes[@js($profile)]" class="w-full border border-amber-300 rounded-lg px-3 py-2 text-sm bg-white" placeholder="Enter the code from email or WhatsApp">
+                                    </div>
+                                    <button type="button" @click="submitCode(@js($profile))" :disabled="actionFor(@js($profile)) === 'submitCode' || !(verificationCodes[@js($profile)] || '').trim()" class="inline-flex items-center px-4 py-2 bg-amber-600 text-white text-sm font-medium rounded-lg hover:bg-amber-700 disabled:opacity-50">
+                                        <span x-text="actionFor(@js($profile)) === 'submitCode' ? 'Submitting code…' : 'Submit verification code'"></span>
+                                    </button>
                                 </div>
                             </div>
                         </template>
@@ -208,6 +227,7 @@ function instagramAccountsPage() {
         actionMap: {},
         accountStates: {},
         payloads: {},
+        verificationCodes: {},
         accountLog: [],
         toast: { show: false, message: '', type: 'success' },
         toastTimer: null,
@@ -315,6 +335,8 @@ function instagramAccountsPage() {
             this.accountStates[profile] = {
                 connected: Boolean(data.connected),
                 login_form: Boolean(data.login_form),
+                verification_required: Boolean(data.verification_required),
+                verification_channel: data.verification_channel || '',
                 challenge: Boolean(data.challenge),
                 detail: payload?.detail || '',
                 message: payload?.message || '',
@@ -344,6 +366,7 @@ function instagramAccountsPage() {
         statusLabel(profile) {
             const state = this.stateFor(profile);
             if (state.connected) return 'Connected';
+            if (state.verification_required) return this.verificationShortLabel(profile);
             if (state.challenge) return 'Challenge required';
             if (state.login_form) return 'Login form visible';
             if (state.current_url) return 'Not connected';
@@ -353,6 +376,7 @@ function instagramAccountsPage() {
         statusTone(profile) {
             const state = this.stateFor(profile);
             if (state.connected) return 'text-emerald-700';
+            if (state.verification_required) return 'text-amber-700';
             if (state.challenge) return 'text-amber-700';
             if (state.login_form) return 'text-rose-700';
             return 'text-gray-500';
@@ -366,6 +390,7 @@ function instagramAccountsPage() {
         proofHeadline(profile) {
             const state = this.stateFor(profile);
             if (state.connected) return 'The browser session is authenticated and Instagram navigation markers were found.';
+            if (state.verification_required) return this.verificationHeading(profile);
             if (state.challenge) return 'Instagram is asking for challenge/checkpoint verification on this browser profile.';
             if (state.login_form) return 'Instagram is still serving a login screen for this browser profile.';
             if (state.current_url) return 'Instagram loaded, but the session was not confirmed as authenticated.';
@@ -375,6 +400,7 @@ function instagramAccountsPage() {
         proofBadge(profile) {
             const state = this.stateFor(profile);
             if (state.connected) return 'Connected';
+            if (state.verification_required) return this.verificationShortLabel(profile);
             if (state.challenge) return 'Challenge';
             if (state.login_form) return 'Needs login';
             if (state.current_url) return 'Not confirmed';
@@ -384,6 +410,7 @@ function instagramAccountsPage() {
         proofBadgeClass(profile) {
             const state = this.stateFor(profile);
             if (state.connected) return 'bg-emerald-100 text-emerald-700';
+            if (state.verification_required) return 'bg-amber-100 text-amber-700';
             if (state.challenge) return 'bg-amber-100 text-amber-700';
             if (state.login_form) return 'bg-rose-100 text-rose-700';
             return 'bg-slate-100 text-slate-700';
@@ -401,11 +428,41 @@ function instagramAccountsPage() {
         proofSecondary(profile) {
             const state = this.stateFor(profile);
             const details = [];
+            details.push('Saved password: ' + (this.accounts.find((account) => account.profile === profile)?.password_configured ? 'configured' : 'missing'));
             if (state.visible_text_inputs?.length) details.push('Visible text inputs: ' + state.visible_text_inputs.join(', '));
             if (state.visible_password_inputs) details.push('Visible password inputs: ' + state.visible_password_inputs);
             if (state.strong_nav_count) details.push('Strong nav markers: ' + state.strong_nav_count);
             if (state.last_error) details.push('Worker error: ' + state.last_error);
             return details.join(' • ');
+        },
+
+        needsVerificationCode(profile) {
+            return Boolean(this.stateFor(profile).verification_required);
+        },
+
+        verificationShortLabel(profile) {
+            const channel = this.stateFor(profile).verification_channel;
+            if (channel === 'email') return 'Email code required';
+            if (channel === 'whatsapp') return 'WhatsApp code required';
+            if (channel === 'sms') return 'SMS code required';
+            return 'Verification required';
+        },
+
+        verificationHeading(profile) {
+            const channel = this.stateFor(profile).verification_channel;
+            if (channel === 'email') return 'Instagram accepted the password and is waiting for the email code.';
+            if (channel === 'whatsapp') return 'Instagram accepted the password and is waiting for the WhatsApp code.';
+            if (channel === 'sms') return 'Instagram accepted the password and is waiting for the SMS code.';
+            return 'Instagram accepted the password and is waiting for a verification code.';
+        },
+
+        proofNextStep(profile) {
+            const state = this.stateFor(profile);
+            if (state.connected) return 'Next step: the account is ready. Move to Settings or Raw Workspace and run live scans.';
+            if (state.verification_required) return 'Next step: enter the verification code below and submit it here so the attached browser session can finish the login.';
+            if (state.login_form) return 'Next step: click “Log in with saved credentials” to submit the stored username and password into the attached browser profile.';
+            if (state.challenge) return 'Next step: Instagram is blocking the session behind a challenge. Finish the challenge, then run Check status again.';
+            return 'Next step: run Check status again after the browser session changes.';
         },
 
         async addAccount() {
@@ -472,6 +529,28 @@ function instagramAccountsPage() {
             } catch (error) {
                 this.log('error', 'Instagram login request failed for ' + profile + '.', error?.message || String(error));
                 this.showToast('Instagram login request failed.', 'error');
+            } finally {
+                delete this.actionMap[profile];
+            }
+        },
+
+        async submitCode(profile) {
+            this.actionMap[profile] = 'submitCode';
+            try {
+                const { data } = await this.request('{{ route('instagram.accounts.submit-code') }}', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ profile, code: this.verificationCodes[profile] || '' }),
+                });
+                this.rememberPayload(profile, data);
+                this.log(data.success ? 'success' : 'error', 'Submitted Instagram verification code for ' + profile + '.', {
+                    message: data.message || '',
+                    detail: data.detail || '',
+                });
+                this.showToast(data.message || (data.success ? 'Verification code submitted.' : 'Verification code submission failed.'), data.success ? 'success' : 'error');
+            } catch (error) {
+                this.log('error', 'Instagram verification code submission failed for ' + profile + '.', error?.message || String(error));
+                this.showToast('Instagram verification code submission failed.', 'error');
             } finally {
                 delete this.actionMap[profile];
             }

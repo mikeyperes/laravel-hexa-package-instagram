@@ -53,8 +53,17 @@ class InstagramAccountSessionService
     public function status(?string $profile = null): array
     {
         $resolved = $this->config->resolveProfile($profile);
+        $runtime = $this->browser->status($resolved);
+        $currentUrl = strtolower((string) ($runtime['data']['current_url'] ?? ''));
+        $useCurrentPage = $currentUrl !== '' && $currentUrl !== 'about:blank' && str_contains($currentUrl, 'instagram.com');
 
-        $result = $this->browser->runAutomation($resolved, [
+        $steps = $useCurrentPage ? [
+            [
+                'type' => 'evaluate',
+                'label' => 'detect_login_state',
+                'code' => self::stateProbeJs(),
+            ],
+        ] : [
             [
                 'type' => 'goto',
                 'label' => 'open_instagram_home',
@@ -78,7 +87,9 @@ class InstagramAccountSessionService
                 'label' => 'detect_login_state',
                 'code' => self::stateProbeJs(),
             ],
-        ], [
+        ];
+
+        $result = $this->browser->runAutomation($resolved, $steps, [
             'final' => [
                 'include_screenshot' => false,
             ],
@@ -179,6 +190,73 @@ class InstagramAccountSessionService
         return $this->normalizeStatusResult($resolved, $result, 'Instagram login flow finished.');
     }
 
+    public function submitVerificationCode(?string $profile, string $code): array
+    {
+        $resolved = $this->config->resolveProfile($profile);
+        $code = trim($code);
+
+        if ($code === '') {
+            return $this->failure('Verification code is missing.', 'Enter the verification code from Instagram before submitting it.', [
+                'profile' => $resolved,
+            ]);
+        }
+
+        $currentStatus = $this->status($resolved);
+        if (!empty($currentStatus['data']['connected'])) {
+            $currentStatus['message'] = 'Instagram account is already connected.';
+            $currentStatus['detail'] = 'No verification code is needed because this browser profile is already authenticated.';
+            return $currentStatus;
+        }
+
+        if (empty($currentStatus['data']['verification_required'])) {
+            return $this->failure(
+                'Instagram is not waiting for a verification code.',
+                'Run “Log in with saved credentials” first, then submit the verification code while the browser profile is on the code-entry screen.',
+                [
+                    'profile' => $resolved,
+                    'status' => $currentStatus,
+                ]
+            );
+        }
+
+        $result = $this->browser->runAutomation($resolved, [
+            [
+                'type' => 'evaluate',
+                'label' => 'submit_verification_code',
+                'code' => self::submitVerificationCodeJs(),
+                'args' => [
+                    'code' => $code,
+                ],
+            ],
+            [
+                'type' => 'wait_ms',
+                'label' => 'settle_after_code_submit',
+                'ms' => 5000,
+            ],
+            [
+                'type' => 'evaluate',
+                'label' => 'dismiss_post_login_prompts',
+                'code' => self::dismissPostLoginPromptsJs(),
+            ],
+            [
+                'type' => 'wait_ms',
+                'label' => 'settle_after_prompts',
+                'ms' => 1200,
+            ],
+            [
+                'type' => 'evaluate',
+                'label' => 'detect_login_state',
+                'code' => self::stateProbeJs(),
+            ],
+        ], [
+            'final' => [
+                'include_screenshot' => false,
+            ],
+        ]);
+
+        return $this->normalizeStatusResult($resolved, $result, 'Instagram verification code submitted.');
+    }
+
     public function logout(?string $profile = null): array
     {
         return $this->browser->logoutProfile($this->config->resolveProfile($profile));
@@ -240,7 +318,14 @@ const visibleTextInputs = inputs.filter((node) => ['text', 'email', 'tel', 'sear
 const visiblePasswordInputs = inputs.filter((node) => (node.type || '').toLowerCase() === 'password');
 const loginForm = Boolean(document.querySelector('input[name="username"], input[name="password"]')) || (visibleTextInputs.length > 0 && visiblePasswordInputs.length > 0);
 const verificationRequired = /\/auth_platform\/codeentry/i.test(location.pathname)
-  || /check your whatsapp messages|enter the code we sent to your whatsapp account|try another way/i.test(bodyLower);
+  || /check your whatsapp messages|enter the code we sent to your whatsapp account|check your email|check your inbox|enter the code we sent to|confirmation code|security code|try another way/i.test(bodyLower);
+const verificationChannel = verificationRequired
+  ? (/whatsapp/i.test(bodyText)
+      ? 'whatsapp'
+      : (/check your email|check your inbox|email/i.test(bodyLower)
+          ? 'email'
+          : (/text message|sms/i.test(bodyLower) ? 'sms' : 'code')))
+  : '';
 const challenge = verificationRequired || /challenge|checkpoint|two_factor|suspended/i.test(`${location.pathname} ${bodyText}`);
 const alerts = Array.from(document.querySelectorAll('[role="alert"]')).map((node) => (node.innerText || '').trim()).filter(Boolean);
 const visibleButtons = Array.from(document.querySelectorAll('button')).map((node) => (node.innerText || '').trim()).filter(Boolean).slice(0, 20);
@@ -268,6 +353,7 @@ return {
   title: document.title,
   login_form: loginForm,
   verification_required: verificationRequired,
+  verification_channel: verificationChannel,
   challenge,
   login_copy_detected: loginCopyDetected,
   alerts,
@@ -407,6 +493,78 @@ JS;
 JS;
     }
 
+    public static function submitVerificationCodeJs(): string
+    {
+        return <<<'JS'
+((args) => {
+  const isVisible = (node) => {
+    if (!node) return false;
+    const style = window.getComputedStyle(node);
+    return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
+  };
+
+  const setNativeValue = (node, value) => {
+    const prototype = Object.getPrototypeOf(node);
+    const descriptor = Object.getOwnPropertyDescriptor(prototype, 'value');
+    if (descriptor?.set) {
+      descriptor.set.call(node, value);
+    } else {
+      node.value = value;
+    }
+    for (const eventName of ['input', 'change', 'keyup']) {
+      node.dispatchEvent(new Event(eventName, { bubbles: true }));
+    }
+  };
+
+  const code = String(args?.code || '').trim();
+  const visibleInputs = Array.from(document.querySelectorAll('input')).filter(isVisible).filter((node) => !node.disabled);
+  const codeInput = document.querySelector('input[name="code"]')
+    || visibleInputs.find((node) => /code/i.test(`${node.name || ''} ${node.getAttribute('aria-label') || ''} ${node.getAttribute('placeholder') || ''}`))
+    || visibleInputs.find((node) => ['text', 'tel', 'number', ''].includes((node.type || '').toLowerCase()));
+
+  const summary = {
+    found_code_input: Boolean(codeInput),
+    submitted: false,
+    visible_inputs: visibleInputs.map((node) => ({
+      type: node.type || '',
+      name: node.name || '',
+      aria: node.getAttribute('aria-label') || '',
+      placeholder: node.getAttribute('placeholder') || '',
+    })).slice(0, 10),
+  };
+
+  if (!codeInput) {
+    summary.reason = 'Could not find a visible Instagram verification code input.';
+    return summary;
+  }
+
+  setNativeValue(codeInput, code);
+
+  const buttons = Array.from(document.querySelectorAll('button')).filter(isVisible).filter((node) => !node.disabled);
+  const submitButton = document.querySelector('button[type="submit"]')
+    || buttons.find((node) => /continue|confirm|submit|next/i.test((node.innerText || '').trim()));
+
+  if (submitButton) {
+    submitButton.click();
+    summary.submitted = true;
+    summary.submit_text = (submitButton.innerText || '').trim();
+  } else if (codeInput.form) {
+    if (typeof codeInput.form.requestSubmit === 'function') {
+      codeInput.form.requestSubmit();
+    } else {
+      codeInput.form.submit();
+    }
+    summary.submitted = true;
+    summary.submit_text = 'form_submit';
+  } else {
+    summary.reason = 'Verification code input was found, but no continue button or form was available.';
+  }
+
+  return summary;
+})(args)
+JS;
+    }
+
     private function normalizeStatusResult(string $profile, array $result, string $successMessage = 'Instagram account status loaded.'): array
     {
         $probe = $this->resultByLabel($result, 'detect_login_state');
@@ -414,6 +572,7 @@ JS;
         $probeConnected = (bool) ($probe['connected'] ?? false);
         $loginForm = (bool) ($probe['login_form'] ?? false);
         $verificationRequired = (bool) ($probe['verification_required'] ?? false);
+        $verificationChannel = (string) ($probe['verification_channel'] ?? '');
         $challenge = (bool) ($probe['challenge'] ?? false);
         $loginCopyDetected = (bool) ($probe['login_copy_detected'] ?? false);
         $strongNavCount = (int) ($probe['strong_nav_count'] ?? 0);
@@ -423,7 +582,12 @@ JS;
         $detail = $connected
             ? 'The browser session is authenticated and reached Instagram without a login form.'
             : ($verificationRequired
-                ? 'Instagram accepted the login but is waiting for the verification code it sent to the linked WhatsApp number.'
+                ? match ($verificationChannel) {
+                    'email' => 'Instagram accepted the saved credentials and is waiting for the verification code it sent by email.',
+                    'sms' => 'Instagram accepted the saved credentials and is waiting for the verification code it sent by text message.',
+                    'whatsapp' => 'Instagram accepted the saved credentials and is waiting for the verification code it sent to the linked WhatsApp number.',
+                    default => 'Instagram accepted the saved credentials and is waiting for a verification code before it can finish the login.',
+                }
                 : ($challenge
                 ? 'Instagram returned a challenge/checkpoint state for this browser profile.'
                 : (($loginForm || $loginCopyDetected)
@@ -448,6 +612,7 @@ JS;
                 'connected' => $connected,
                 'login_form' => $loginForm,
                 'verification_required' => $verificationRequired,
+                'verification_channel' => $verificationChannel,
                 'challenge' => $challenge,
                 'probe' => $probe,
                 'worker' => $result['data'] ?? [],

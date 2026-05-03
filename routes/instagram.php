@@ -17,6 +17,7 @@ Route::middleware(['web', 'auth', 'locked', 'system_lock', 'two_factor', 'role']
     Route::post('/instagram/accounts/activate', [InstagramAccountsController::class, 'activate'])->name('instagram.accounts.activate');
     Route::post('/instagram/accounts/login', [InstagramAccountsController::class, 'login'])->name('instagram.accounts.login');
     Route::get('/instagram/accounts/status', [InstagramAccountsController::class, 'status'])->name('instagram.accounts.status');
+    Route::post('/instagram/accounts/submit-code', [InstagramAccountsController::class, 'submitVerificationCode'])->name('instagram.accounts.submit-code');
     Route::post('/instagram/accounts/logout', [InstagramAccountsController::class, 'logout'])->name('instagram.accounts.logout');
     Route::delete('/instagram/accounts', [InstagramAccountsController::class, 'destroy'])->name('instagram.accounts.destroy');
 

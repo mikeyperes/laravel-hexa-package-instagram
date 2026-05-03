@@ -120,6 +120,27 @@ class InstagramAccountsController extends Controller
         return response()->json($result);
     }
 
+    public function submitVerificationCode(Request $request, InstagramConfigRepository $config, InstagramAccountSessionService $sessions): JsonResponse
+    {
+        $validated = $request->validate([
+            'profile' => ['nullable', 'string', 'max:80', 'regex:/^[A-Za-z0-9._-]+$/'],
+            'code' => ['required', 'string', 'max:32'],
+        ]);
+
+        $profile = $config->resolveProfile($validated['profile'] ?? null);
+        $result = $sessions->submitVerificationCode($profile, $validated['code']);
+
+        ActivityLog::log('instagram', 'account_submit_code', ((bool) ($result['success'] ?? false) ? 'Submitted' : 'Failed to submit') . ' Instagram verification code for profile: ' . $profile, [
+            'profile' => $profile,
+            'success' => (bool) ($result['success'] ?? false),
+            'message' => $result['message'] ?? null,
+            'detail' => $result['detail'] ?? null,
+            'verification_channel' => $result['data']['verification_channel'] ?? null,
+        ]);
+
+        return response()->json($result);
+    }
+
     public function destroy(Request $request, InstagramConfigRepository $config, InstagramAccountSessionService $sessions, BrowserWorkerBridgeContract $browser): JsonResponse
     {
         $validated = $request->validate([
