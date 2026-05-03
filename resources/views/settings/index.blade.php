@@ -95,7 +95,7 @@
                 <div class="flex items-start justify-between gap-3 flex-wrap">
                     <div>
                         <h2 class="text-lg font-semibold text-gray-900">Full Connection Test</h2>
-                        <p class="mt-1 text-sm text-gray-500">Pick a saved account and verify that browser-worker can prove a real authenticated Instagram session.</p>
+                        <p class="mt-1 text-sm text-gray-500">Pick a saved account, prove that exact browser session is connected, load its following graph, then sample recent posts and live stories from accounts it follows.</p>
                     </div>
                     <button type="button" @click="runTest()" :disabled="testing || !testProfile" class="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50">
                         <span x-text="testing ? 'Testing…' : 'Run Connection Test'"></span>
@@ -137,6 +137,77 @@
                             <div class="rounded-lg border border-gray-200 bg-white px-4 py-3">
                                 <div class="text-xs uppercase tracking-wide text-gray-500">Worker state</div>
                                 <div class="mt-1 text-gray-900" x-text="testWorkerState()"></div>
+                            </div>
+                        </div>
+                    </template>
+
+                    <template x-if="testResult?.data?.following_sample">
+                        <div class="grid gap-3 text-sm">
+                            <div class="rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3 space-y-3">
+                                <div class="flex items-start justify-between gap-3 flex-wrap">
+                                    <div>
+                                        <div class="text-xs uppercase tracking-wide text-indigo-700">Following graph</div>
+                                        <div class="mt-1 font-medium text-indigo-900" x-text="followingSample()?.source_username || 'Unknown source account'"></div>
+                                    </div>
+                                    <span class="inline-flex items-center rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-indigo-700" x-text="(followingSample()?.count || 0) + ' followed accounts'"></span>
+                                </div>
+                                <div class="text-indigo-900" x-text="followingSample()?.detail || 'No following-list detail returned.'"></div>
+                                <div class="flex flex-wrap gap-2" x-show="followingUsernames().length">
+                                    <template x-for="username in followingUsernames()" :key="username">
+                                        <span class="inline-flex items-center rounded-full bg-white px-2.5 py-1 text-xs font-medium text-indigo-700 border border-indigo-200" x-text="'@' + username"></span>
+                                    </template>
+                                </div>
+                            </div>
+
+                            <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 space-y-3">
+                                <div class="flex items-start justify-between gap-3 flex-wrap">
+                                    <div>
+                                        <div class="text-xs uppercase tracking-wide text-emerald-700">Random followed recent posts</div>
+                                        <div class="mt-1 font-medium text-emerald-900" x-text="randomFollowingPost()?.instagram_username ? '@' + randomFollowingPost().instagram_username : 'No followed account sampled yet'"></div>
+                                    </div>
+                                    <span class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold"
+                                          :class="randomFollowingPost()?.success ? 'bg-white text-emerald-700 border border-emerald-200' : 'bg-white text-amber-700 border border-amber-200'"
+                                          x-text="randomFollowingPost()?.success ? 'Posts loaded' : 'Posts missing'"></span>
+                                </div>
+                                <div class="text-emerald-900" x-text="randomFollowingPost()?.detail || 'No followed-post sample returned yet.'"></div>
+                                <div class="text-xs text-emerald-800" x-show="checkedUsernames(randomFollowingPost()).length">
+                                    Checked usernames:
+                                    <span class="font-mono" x-text="checkedUsernames(randomFollowingPost()).join(', ')"></span>
+                                </div>
+                                <div class="space-y-2" x-show="Array.isArray(randomFollowingPost()?.recent_post_links) && randomFollowingPost().recent_post_links.length">
+                                    <template x-for="link in (randomFollowingPost()?.recent_post_links || [])" :key="link">
+                                        <a :href="link" target="_blank" rel="noopener" class="block break-all text-sm font-medium text-blue-700 underline" x-text="link"></a>
+                                    </template>
+                                </div>
+                            </div>
+
+                            <div class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 space-y-3">
+                                <div class="flex items-start justify-between gap-3 flex-wrap">
+                                    <div>
+                                        <div class="text-xs uppercase tracking-wide text-amber-700">Random followed active story</div>
+                                        <div class="mt-1 font-medium text-amber-900" x-text="randomFollowingStory()?.instagram_username ? '@' + randomFollowingStory().instagram_username : 'No active story sampled yet'"></div>
+                                    </div>
+                                    <span class="inline-flex items-center rounded-full bg-white px-2.5 py-1 text-xs font-semibold border"
+                                          :class="randomFollowingStory()?.success ? 'text-amber-700 border-amber-200' : 'text-slate-700 border-slate-200'"
+                                          x-text="storySourceLabel()"></span>
+                                </div>
+                                <div class="text-amber-900" x-text="randomFollowingStory()?.detail || 'No active-story sample returned yet.'"></div>
+                                <div class="text-xs text-amber-800" x-show="activeStoryCandidates().length">
+                                    Story candidates:
+                                    <span class="font-mono" x-text="activeStoryCandidates().map((item) => '@' + item.username).join(', ')"></span>
+                                </div>
+                                <div class="text-xs text-amber-800" x-show="checkedUsernames(randomFollowingStory()).length">
+                                    Checked usernames:
+                                    <span class="font-mono" x-text="checkedUsernames(randomFollowingStory()).join(', ')"></span>
+                                </div>
+                                <div class="space-y-2" x-show="randomStoryMedia().length">
+                                    <template x-for="item in randomStoryMedia()" :key="item.type + '-' + item.url">
+                                        <div class="rounded-lg border border-amber-200 bg-white px-3 py-2">
+                                            <div class="text-xs uppercase tracking-wide text-amber-700" x-text="item.type"></div>
+                                            <a :href="item.url" target="_blank" rel="noopener" class="mt-1 block break-all text-sm font-medium text-blue-700 underline" x-text="item.url"></a>
+                                        </div>
+                                    </template>
+                                </div>
                             </div>
                         </div>
                     </template>
@@ -210,7 +281,7 @@ function instagramSettingsPage() {
         toastTimer: null,
 
         init() {
-            this.log('info', 'Instagram settings page loaded. Pick a saved account and run the connection test when ready.');
+            this.log('info', 'Instagram settings page loaded. Pick a saved account to verify that exact attached session, then sample followed posts and stories.');
         },
 
         csrfToken() {
@@ -366,6 +437,47 @@ function instagramSettingsPage() {
             const account = this.selectedAccount();
             if (!account) return 'No saved account selected';
             return account.label + (account.instagram_username ? ' · ' + account.instagram_username : '');
+        },
+
+        followingSample() {
+            return this.testResult?.data?.following_sample || null;
+        },
+
+        followingUsernames() {
+            return this.followingSample()?.usernames || [];
+        },
+
+        activeStoryCandidates() {
+            return this.testResult?.data?.active_story_candidates?.usernames || [];
+        },
+
+        randomFollowingPost() {
+            return this.testResult?.data?.random_following_post || null;
+        },
+
+        randomFollowingStory() {
+            return this.testResult?.data?.random_following_story || null;
+        },
+
+        checkedUsernames(sample) {
+            return Array.isArray(sample?.checked_usernames) ? sample.checked_usernames : [];
+        },
+
+        randomStoryMedia() {
+            const sample = this.randomFollowingStory();
+            const media = [];
+            const images = Array.isArray(sample?.image_urls) ? sample.image_urls : [];
+            const videos = Array.isArray(sample?.video_urls) ? sample.video_urls : [];
+            images.forEach((url) => media.push({ type: 'Image', url }));
+            videos.forEach((url) => media.push({ type: 'Video', url }));
+            return media;
+        },
+
+        storySourceLabel() {
+            const source = this.randomFollowingStory()?.source || '';
+            if (source === 'following_fallback') return 'Following fallback';
+            if (source === 'active_story_candidates') return 'Home story tray';
+            return 'No story source yet';
         },
     };
 }

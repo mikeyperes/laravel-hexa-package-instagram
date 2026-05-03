@@ -345,7 +345,8 @@ const strongNavSelectors = [
 ];
 const strongNavMatches = strongNavSelectors.filter((selector) => document.querySelector(selector));
 const loginCopyDetected = /log into instagram|log in to instagram|mobile number, username or email|forgot password|log in with facebook|create new account|sign up/i.test(bodyLower);
-const connected = strongNavMatches.length > 0 && !loginCopyDetected && !loginForm && !challenge && !/\/accounts\/login/i.test(location.pathname);
+const storyViewerDetected = /^\/stories\//i.test(location.pathname) && /instagram/i.test(document.title) && !loginCopyDetected && !loginForm && !challenge;
+const connected = (strongNavMatches.length > 0 || storyViewerDetected) && !loginCopyDetected && !loginForm && !challenge && !/\/accounts\/login/i.test(location.pathname);
 
 return {
   url: location.href,
@@ -362,6 +363,7 @@ return {
   auth_indicator_count: authenticatedMarkers.length,
   strong_nav_count: strongNavMatches.length,
   strong_nav_matches: strongNavMatches,
+  story_viewer_detected: storyViewerDetected,
   visible_text_inputs: visibleTextInputs.map((node) => node.getAttribute('aria-label') || node.getAttribute('placeholder') || node.name || 'text-input').slice(0, 8),
   visible_password_inputs: visiblePasswordInputs.length,
   body_excerpt: bodyText.slice(0, 1200),
@@ -576,8 +578,9 @@ JS;
         $challenge = (bool) ($probe['challenge'] ?? false);
         $loginCopyDetected = (bool) ($probe['login_copy_detected'] ?? false);
         $strongNavCount = (int) ($probe['strong_nav_count'] ?? 0);
+        $storyViewerDetected = (bool) ($probe['story_viewer_detected'] ?? false);
         $alerts = $probe['alerts'] ?? [];
-        $connected = $probeConnected && !$loginForm && !$challenge && !$loginCopyDetected && $strongNavCount > 0;
+        $connected = $probeConnected && !$loginForm && !$challenge && !$loginCopyDetected && ($strongNavCount > 0 || $storyViewerDetected);
         $workerDetail = trim((string) ($result['detail'] ?? ''));
         $detail = $connected
             ? 'The browser session is authenticated and reached Instagram without a login form.'
@@ -614,6 +617,7 @@ JS;
                 'verification_required' => $verificationRequired,
                 'verification_channel' => $verificationChannel,
                 'challenge' => $challenge,
+                'story_viewer_detected' => $storyViewerDetected,
                 'probe' => $probe,
                 'worker' => $result['data'] ?? [],
                 'account' => $this->config->findAccount($profile),

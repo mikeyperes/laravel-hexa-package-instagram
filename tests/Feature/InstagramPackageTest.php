@@ -448,6 +448,110 @@ class InstagramPackageTest extends TestCase
         $this->assertSame('Instagram accepted the saved credentials and is waiting for the verification code it sent by email.', $result['detail']);
     }
 
+
+    public function test_status_treats_authenticated_story_viewer_as_connected(): void
+    {
+        $repository = app(InstagramConfigRepository::class);
+        $repository->saveAccount('JPN Main', 'jpn-miami', 'miamijpn', true);
+
+        app()->instance(BrowserWorkerBridgeContract::class, new class implements BrowserWorkerBridgeContract {
+            public function health(): array
+            {
+                return ['success' => true, 'message' => 'Browser worker is reachable.', 'status_code' => 200];
+            }
+
+            public function integrityTest(?string $profile = null): array
+            {
+                return ['success' => true];
+            }
+
+            public function status(?string $profile = null): array
+            {
+                return [
+                    'success' => true,
+                    'data' => [
+                        'current_url' => 'https://www.instagram.com/stories/lasolasjewishcenter/',
+                    ],
+                ];
+            }
+
+            public function logs(int $limit = 100): array
+            {
+                return ['success' => true];
+            }
+
+            public function launchProfile(?string $profile = null): array
+            {
+                return ['success' => true];
+            }
+
+            public function closeProfile(?string $profile = null): array
+            {
+                return ['success' => true];
+            }
+
+            public function logoutProfile(?string $profile = null): array
+            {
+                return ['success' => true];
+            }
+
+            public function deleteProfile(?string $profile = null): array
+            {
+                return ['success' => true];
+            }
+
+            public function pageHtml(?string $profile, string $url, array $options = []): array
+            {
+                return ['success' => true];
+            }
+
+            public function pageText(?string $profile, string $url, array $options = []): array
+            {
+                return ['success' => true];
+            }
+
+            public function pageScreenshot(?string $profile, string $url, array $options = []): array
+            {
+                return ['success' => true];
+            }
+
+            public function runAutomation(?string $profile, array $steps, array $options = []): array
+            {
+                return [
+                    'success' => true,
+                    'message' => 'Automation flow completed.',
+                    'status_code' => 200,
+                    'data' => [
+                        'results' => [
+                            ['label' => 'detect_login_state', 'result' => [
+                                'connected' => true,
+                                'login_form' => false,
+                                'verification_required' => false,
+                                'challenge' => false,
+                                'login_copy_detected' => false,
+                                'strong_nav_count' => 0,
+                                'story_viewer_detected' => true,
+                                'alerts' => [],
+                                'title' => 'Stories • Instagram',
+                                'path' => '/stories/lasolasjewishcenter/',
+                            ]],
+                        ],
+                        'final' => [
+                            'final_url' => 'https://www.instagram.com/stories/lasolasjewishcenter/',
+                        ],
+                    ],
+                ];
+            }
+        });
+
+        $result = app(InstagramAccountSessionService::class)->status('jpn-miami');
+
+        $this->assertTrue($result['success']);
+        $this->assertTrue($result['data']['connected']);
+        $this->assertTrue($result['data']['story_viewer_detected']);
+        $this->assertSame('Instagram account status loaded.', $result['message']);
+    }
+
     public function test_public_import_fallback_extracts_image_caption_and_title(): void
     {
         app()->instance(BrowserHttpService::class, new class extends BrowserHttpService {
@@ -1059,5 +1163,97 @@ class InstagramPackageTest extends TestCase
         $this->assertStringContainsString("href.includes('/p/')", $probe);
         $this->assertStringContainsString("href.includes('/reel/')", $probe);
         $this->assertStringContainsString("href.includes('/tv/')", $probe);
+    }
+
+    public function test_following_scan_returns_followed_usernames_from_worker_result(): void
+    {
+        app()->instance(BrowserWorkerBridgeContract::class, new class implements BrowserWorkerBridgeContract {
+            public function health(): array { return ['success' => true]; }
+            public function integrityTest(?string $profile = null): array { return ['success' => true]; }
+            public function status(?string $profile = null): array { return ['success' => true]; }
+            public function logs(int $limit = 100): array { return ['success' => true]; }
+            public function launchProfile(?string $profile = null): array { return ['success' => true]; }
+            public function closeProfile(?string $profile = null): array { return ['success' => true]; }
+            public function logoutProfile(?string $profile = null): array { return ['success' => true]; }
+            public function deleteProfile(?string $profile = null): array { return ['success' => true]; }
+            public function pageHtml(?string $profile, string $url, array $options = []): array { return ['success' => true]; }
+            public function pageText(?string $profile, string $url, array $options = []): array { return ['success' => true]; }
+            public function pageScreenshot(?string $profile, string $url, array $options = []): array { return ['success' => true]; }
+            public function runAutomation(?string $profile, array $steps, array $options = []): array
+            {
+                return [
+                    'success' => true,
+                    'message' => 'Automation flow completed.',
+                    'status_code' => 200,
+                    'data' => [
+                        'results' => [
+                            ['label' => 'extract_following', 'result' => [
+                                'body_excerpt' => 'Following dialog proof',
+                                'username_count' => 3,
+                                'usernames' => ['eli.mishael', 'mikeyperes', 'yjpalmbeach'],
+                            ]],
+                        ],
+                        'final' => [
+                            'final_url' => 'https://www.instagram.com/miamijpn/',
+                            'screenshot_data_url' => 'data:image/png;base64,proof',
+                        ],
+                    ],
+                ];
+            }
+        });
+
+        $result = app(InstagramScraperService::class)->followingScan('jpn-miami', 'miamijpn', 80);
+
+        $this->assertTrue($result['success']);
+        $this->assertSame('Instagram following scan completed.', $result['message']);
+        $this->assertSame(3, $result['data']['scan']['username_count']);
+        $this->assertSame('eli.mishael', $result['data']['scan']['usernames'][0]);
+    }
+
+    public function test_active_story_candidates_scan_returns_home_feed_usernames(): void
+    {
+        app()->instance(BrowserWorkerBridgeContract::class, new class implements BrowserWorkerBridgeContract {
+            public function health(): array { return ['success' => true]; }
+            public function integrityTest(?string $profile = null): array { return ['success' => true]; }
+            public function status(?string $profile = null): array { return ['success' => true]; }
+            public function logs(int $limit = 100): array { return ['success' => true]; }
+            public function launchProfile(?string $profile = null): array { return ['success' => true]; }
+            public function closeProfile(?string $profile = null): array { return ['success' => true]; }
+            public function logoutProfile(?string $profile = null): array { return ['success' => true]; }
+            public function deleteProfile(?string $profile = null): array { return ['success' => true]; }
+            public function pageHtml(?string $profile, string $url, array $options = []): array { return ['success' => true]; }
+            public function pageText(?string $profile, string $url, array $options = []): array { return ['success' => true]; }
+            public function pageScreenshot(?string $profile, string $url, array $options = []): array { return ['success' => true]; }
+            public function runAutomation(?string $profile, array $steps, array $options = []): array
+            {
+                return [
+                    'success' => true,
+                    'message' => 'Automation flow completed.',
+                    'status_code' => 200,
+                    'data' => [
+                        'results' => [
+                            ['label' => 'extract_story_candidates', 'result' => [
+                                'body_excerpt' => 'Story tray proof',
+                                'username_count' => 2,
+                                'usernames' => [
+                                    ['username' => 'the_house_of_more', 'source' => 'feed_text'],
+                                    ['username' => 'yjpalmbeach', 'source' => 'feed_text'],
+                                ],
+                            ]],
+                        ],
+                        'final' => [
+                            'final_url' => 'https://www.instagram.com/',
+                        ],
+                    ],
+                ];
+            }
+        });
+
+        $result = app(InstagramScraperService::class)->activeStoryCandidatesScan('jpn-miami', 'miamijpn', 24);
+
+        $this->assertTrue($result['success']);
+        $this->assertSame('Instagram active story candidates loaded.', $result['message']);
+        $this->assertSame(2, $result['data']['scan']['username_count']);
+        $this->assertSame('the_house_of_more', $result['data']['scan']['usernames'][0]['username']);
     }
 }
