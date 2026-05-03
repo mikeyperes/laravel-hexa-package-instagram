@@ -894,9 +894,9 @@ class InstagramPackageTest extends TestCase
 
             public function runAutomation(?string $profile, array $steps, array $options = []): array
             {
-                $label = $steps[1]['label'] ?? $steps[2]['label'] ?? 'detect_login_state';
+                $labels = array_column($steps, 'label');
 
-                if ($label === 'extract_profile') {
+                if (in_array('extract_profile', $labels, true)) {
                     return [
                         'success' => true,
                         'message' => 'Automation flow completed.',
