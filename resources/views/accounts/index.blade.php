@@ -134,6 +134,36 @@
                         </button>
                     </div>
 
+                    <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                        <div class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                            <div class="text-xs uppercase tracking-wide text-slate-500">Current state</div>
+                            <div class="mt-1 text-sm font-semibold" :class="statusTone(@js($profile))" x-text="statusLabel(@js($profile))"></div>
+                            <div class="mt-1 text-xs text-slate-500" x-text="stateSummary(@js($profile))"></div>
+                        </div>
+                        <div class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                            <div class="text-xs uppercase tracking-wide text-slate-500">Saved credentials</div>
+                            <div class="mt-1 text-sm font-semibold" :class="credentialTone(@js($profile))" x-text="credentialLabel(@js($profile))"></div>
+                            <div class="mt-1 text-xs text-slate-500">Stored in Hexa Core credentials.</div>
+                        </div>
+                        <div class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                            <div class="text-xs uppercase tracking-wide text-slate-500">Second code</div>
+                            <div class="mt-1 text-sm font-semibold" :class="secondCodeTone(@js($profile))" x-text="secondCodeLabel(@js($profile))"></div>
+                            <div class="mt-1 text-xs text-slate-500" x-text="secondCodeDetail(@js($profile))"></div>
+                        </div>
+                        <div class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                            <div class="text-xs uppercase tracking-wide text-slate-500">Current browser page</div>
+                            <div class="mt-1 text-sm">
+                                <template x-if="proofUrl(@js($profile)) && proofUrl(@js($profile)) !== 'No URL captured yet.'">
+                                    <a :href="proofUrl(@js($profile))" target="_blank" rel="noopener" class="font-medium text-blue-700 underline break-all" x-text="proofUrl(@js($profile))"></a>
+                                </template>
+                                <template x-if="!proofUrl(@js($profile)) || proofUrl(@js($profile)) === 'No URL captured yet.'">
+                                    <div class="font-medium text-slate-500">No URL captured yet.</div>
+                                </template>
+                            </div>
+                            <div class="mt-1 text-xs text-slate-500">Opens the attached Instagram browser page in a new tab.</div>
+                        </div>
+                    </div>
+
                         <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
                             <div class="flex items-center justify-between gap-3 flex-wrap">
                                 <div>
@@ -429,11 +459,60 @@ function instagramAccountsPage() {
             const state = this.stateFor(profile);
             const details = [];
             details.push('Saved password: ' + (this.accounts.find((account) => account.profile === profile)?.password_configured ? 'configured' : 'missing'));
+            details.push('Second code: ' + this.secondCodeLabel(profile));
             if (state.visible_text_inputs?.length) details.push('Visible text inputs: ' + state.visible_text_inputs.join(', '));
             if (state.visible_password_inputs) details.push('Visible password inputs: ' + state.visible_password_inputs);
             if (state.strong_nav_count) details.push('Strong nav markers: ' + state.strong_nav_count);
             if (state.last_error) details.push('Worker error: ' + state.last_error);
             return details.join(' • ');
+        },
+
+        credentialConfigured(profile) {
+            return Boolean(this.accounts.find((account) => account.profile === profile)?.password_configured);
+        },
+
+        credentialLabel(profile) {
+            return this.credentialConfigured(profile) ? 'Configured' : 'Missing';
+        },
+
+        credentialTone(profile) {
+            return this.credentialConfigured(profile) ? 'text-emerald-700' : 'text-rose-700';
+        },
+
+        secondCodeLabel(profile) {
+            const state = this.stateFor(profile);
+            if (state.verification_required) return this.verificationShortLabel(profile);
+            if (state.connected) return 'Not needed';
+            if (state.login_form) return 'Not started yet';
+            if (state.challenge) return 'Blocked by challenge';
+            return 'Unknown';
+        },
+
+        secondCodeTone(profile) {
+            const state = this.stateFor(profile);
+            if (state.connected) return 'text-emerald-700';
+            if (state.verification_required || state.challenge) return 'text-amber-700';
+            if (state.login_form) return 'text-slate-700';
+            return 'text-slate-500';
+        },
+
+        secondCodeDetail(profile) {
+            const state = this.stateFor(profile);
+            if (state.connected) return 'Instagram is already authenticated. No extra code is needed right now.';
+            if (state.verification_required) return 'Instagram accepted the password and is waiting for the next code step.';
+            if (state.login_form) return 'Instagram is still at the login screen, so no second code is active yet.';
+            if (state.challenge) return 'Instagram is asking for a checkpoint/challenge before the session can continue.';
+            return 'Run Check status to load the live browser state.';
+        },
+
+        stateSummary(profile) {
+            const state = this.stateFor(profile);
+            if (state.connected) return 'Credentials accepted and the attached browser is usable.';
+            if (state.verification_required) return 'Credentials were accepted. Instagram is waiting for the next code step.';
+            if (state.login_form) return 'The browser is still on Instagram’s login screen.';
+            if (state.challenge) return 'Instagram interrupted the flow with a checkpoint/challenge.';
+            if (state.current_url) return 'Instagram loaded, but the session is not confirmed yet.';
+            return 'Run Check status to inspect the attached browser session.';
         },
 
         needsVerificationCode(profile) {
