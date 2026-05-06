@@ -92,7 +92,7 @@ class InstagramScraperService
     {
         $resolved = $this->config->resolveProfile($profile);
         $username = $this->config->normalizeUsername($username);
-        $limit = max(10, min($limit, 120));
+        $limit = max(10, min($limit, 500));
 
         if ($username === '') {
             return $this->failure('Instagram username is required.', 'Provide the attached Instagram username before scanning the following list.');
@@ -404,7 +404,7 @@ JS;
     {
         return <<<'JS'
 return (async () => {
-  const limit = Math.max(10, Math.min(Number(args?.limit || 80), 120));
+  const limit = Math.max(10, Math.min(Number(args?.limit || 80), 500));
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const text = (node) => (node?.innerText || node?.textContent || '').trim();
   const bodyText = (document.body?.innerText || '').trim();
@@ -442,7 +442,9 @@ return (async () => {
     usernames.push(cleaned);
   };
 
-  for (let pass = 0; pass < 10 && usernames.length < limit; pass += 1) {
+  const maxPasses = Math.max(12, Math.min(48, Math.ceil(limit / 12)));
+
+  for (let pass = 0; pass < maxPasses && usernames.length < limit; pass += 1) {
     Array.from((dialog || document).querySelectorAll('a[href^="/"]')).forEach((node) => {
       const href = node.getAttribute('href') || '';
       const match = href.match(/^\/([A-Za-z0-9._]+)\/?$/);
@@ -571,11 +573,14 @@ const videoUrls = Array.from(document.querySelectorAll('article video, article v
   .map((node) => node.currentSrc || node.getAttribute('src'))
   .filter(Boolean)
   .filter((value, index, array) => array.indexOf(value) === index);
-const captionBlocks = Array.from(document.querySelectorAll('h1, h2, ul h1, ul span, article h1, article span'))
+const captionBlocks = Array.from(document.querySelectorAll('article h1, article ul li h1, article ul li span[dir="auto"], article div[role="presentation"] span[dir="auto"]'))
   .map((node) => (node.innerText || '').trim())
   .filter(Boolean)
   .filter((value, index, array) => array.indexOf(value) === index);
 const canonical = document.querySelector('link[rel="canonical"]')?.getAttribute('href') || '';
+const metaDescription = document.querySelector('meta[property="og:description"]')?.getAttribute('content')
+  || document.querySelector('meta[name="description"]')?.getAttribute('content')
+  || '';
 
 return {
   url: location.href,
@@ -586,6 +591,7 @@ return {
   image_urls: imageUrls,
   video_urls: videoUrls,
   caption_blocks: captionBlocks.slice(0, 12),
+  meta_description: metaDescription,
   body_excerpt: bodyText.slice(0, 3000),
 };
 JS;
