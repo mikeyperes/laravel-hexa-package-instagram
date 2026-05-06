@@ -123,6 +123,7 @@ class InstagramScraperService
                 ],
             ],
         ], [
+            'transport_timeout_ms' => max(90000, ($limit * 180)),
             'final' => [
                 'include_screenshot' => true,
             ],

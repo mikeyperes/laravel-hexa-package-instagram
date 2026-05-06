@@ -1167,7 +1167,8 @@ class InstagramPackageTest extends TestCase
 
     public function test_following_scan_returns_followed_usernames_from_worker_result(): void
     {
-        app()->instance(BrowserWorkerBridgeContract::class, new class implements BrowserWorkerBridgeContract {
+        $spy = new class implements BrowserWorkerBridgeContract {
+            public ?array $lastOptions = null;
             public function health(): array { return ['success' => true]; }
             public function integrityTest(?string $profile = null): array { return ['success' => true]; }
             public function status(?string $profile = null): array { return ['success' => true]; }
@@ -1181,6 +1182,7 @@ class InstagramPackageTest extends TestCase
             public function pageScreenshot(?string $profile, string $url, array $options = []): array { return ['success' => true]; }
             public function runAutomation(?string $profile, array $steps, array $options = []): array
             {
+                $this->lastOptions = $options;
                 return [
                     'success' => true,
                     'message' => 'Automation flow completed.',
@@ -1200,7 +1202,8 @@ class InstagramPackageTest extends TestCase
                     ],
                 ];
             }
-        });
+        };
+        app()->instance(BrowserWorkerBridgeContract::class, $spy);
 
         $result = app(InstagramScraperService::class)->followingScan('jpn-miami', 'miamijpn', 80);
 
@@ -1208,6 +1211,7 @@ class InstagramPackageTest extends TestCase
         $this->assertSame('Instagram following scan completed.', $result['message']);
         $this->assertSame(3, $result['data']['scan']['username_count']);
         $this->assertSame('eli.mishael', $result['data']['scan']['usernames'][0]);
+        $this->assertSame(90000, $spy->lastOptions['transport_timeout_ms'] ?? null);
     }
 
     public function test_active_story_candidates_scan_returns_home_feed_usernames(): void
