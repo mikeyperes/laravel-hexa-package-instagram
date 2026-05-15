@@ -115,6 +115,18 @@ class InstagramScraperService
                 'wait_ms' => 1000,
             ],
             [
+                'type' => 'click_if_exists',
+                'label' => 'open_following_dialog',
+                'selector' => 'a:has-text("Following"), button:has-text("Following"), div[role="button"]:has-text("Following")',
+                'timeout_ms' => 7000,
+                'wait_ms' => 1400,
+            ],
+            [
+                'type' => 'wait_ms',
+                'label' => 'settle_following_dialog',
+                'ms' => 1200,
+            ],
+            [
                 'type' => 'evaluate',
                 'label' => 'extract_following',
                 'code' => self::followingProbeJs(),
@@ -410,11 +422,11 @@ return (async () => {
   const text = (node) => (node?.innerText || node?.textContent || '').trim();
   const bodyText = (document.body?.innerText || '').trim();
   const controls = Array.from(document.querySelectorAll('a, button, div[role="button"]'));
-  const trigger = controls.find((node) => /following/i.test(text(node)) && !/followed by/i.test(text(node)));
+  const dialog = document.querySelector('div[role="dialog"]');
 
-  if (!trigger) {
+  if (!dialog) {
     return {
-      found_trigger: false,
+      found_dialog: false,
       url: location.href,
       title: document.title,
       body_excerpt: bodyText.slice(0, 2000),
@@ -424,43 +436,66 @@ return (async () => {
     };
   }
 
-  trigger.click();
-  await sleep(2500);
-
-  const dialog = document.querySelector('div[role="dialog"]');
-  let list = dialog ? dialog.querySelector('div[style*="overflow"], div._aano, div.x6nl9eh') : null;
+  let list = dialog.querySelector('div[style*="overflow"], div._aano, div.x6nl9eh');
   if (!list && dialog) {
     const candidates = Array.from(dialog.querySelectorAll('div')).filter((el) => el.scrollHeight > el.clientHeight + 40);
     list = candidates.sort((a, b) => b.scrollHeight - a.scrollHeight)[0] || null;
   }
 
   const usernames = [];
+  const seen = new Set();
   const pushName = (value) => {
-    const cleaned = String(value || '').trim().replace(/^@+/, '');
+    const cleaned = String(value || '').trim().replace(/^@+/, '').toLowerCase();
     if (!cleaned) return;
     if (!/^[A-Za-z0-9._]+$/.test(cleaned)) return;
-    if (usernames.includes(cleaned)) return;
+    if (seen.has(cleaned)) return;
+    seen.add(cleaned);
     usernames.push(cleaned);
   };
 
-  const maxPasses = Math.max(12, Math.min(48, Math.ceil(limit / 12)));
-
-  for (let pass = 0; pass < maxPasses && usernames.length < limit; pass += 1) {
-    Array.from((dialog || document).querySelectorAll('a[href^="/"]')).forEach((node) => {
+  const collectVisibleUsernames = () => {
+    Array.from(dialog.querySelectorAll('a[href^="/"]')).forEach((node) => {
       const href = node.getAttribute('href') || '';
       const match = href.match(/^\/([A-Za-z0-9._]+)\/?$/);
       if (match) pushName(match[1]);
     });
+  };
 
+  const maxPasses = Math.max(6, Math.min(18, Math.ceil(limit / 18) + 3));
+  let stagnantPasses = 0;
+
+  for (let pass = 0; pass < maxPasses && usernames.length < limit; pass += 1) {
+    const beforeCount = usernames.length;
+    collectVisibleUsernames();
+    if (usernames.length >= limit) {
+      break;
+    }
+
+    let beforeTop = null;
+    let afterTop = null;
     if (list) {
+      beforeTop = Number(list.scrollTop || 0);
       list.scrollTop = list.scrollHeight;
     }
 
-    await sleep(900);
+    await sleep(list ? 450 : 300);
+    collectVisibleUsernames();
+
+    if (list) {
+      afterTop = Number(list.scrollTop || 0);
+    }
+
+    const grew = usernames.length > beforeCount;
+    const moved = list ? afterTop !== beforeTop : false;
+    stagnantPasses = (grew || moved) ? 0 : (stagnantPasses + 1);
+
+    if (pass >= 2 && stagnantPasses >= 2) {
+      break;
+    }
   }
 
   return {
-    found_trigger: true,
+    found_dialog: true,
     url: location.href,
     title: document.title,
     body_excerpt: bodyText.slice(0, 2000),

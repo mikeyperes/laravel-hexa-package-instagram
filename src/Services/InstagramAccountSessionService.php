@@ -53,17 +53,8 @@ class InstagramAccountSessionService
     public function status(?string $profile = null): array
     {
         $resolved = $this->config->resolveProfile($profile);
-        $runtime = $this->browser->status($resolved);
-        $currentUrl = strtolower((string) ($runtime['data']['current_url'] ?? ''));
-        $useCurrentPage = $currentUrl !== '' && $currentUrl !== 'about:blank' && str_contains($currentUrl, 'instagram.com');
 
-        $steps = $useCurrentPage ? [
-            [
-                'type' => 'evaluate',
-                'label' => 'detect_login_state',
-                'code' => self::stateProbeJs(),
-            ],
-        ] : [
+        $result = $this->browser->runAutomation($resolved, [
             [
                 'type' => 'goto',
                 'label' => 'open_instagram_home',
@@ -87,9 +78,7 @@ class InstagramAccountSessionService
                 'label' => 'detect_login_state',
                 'code' => self::stateProbeJs(),
             ],
-        ];
-
-        $result = $this->browser->runAutomation($resolved, $steps, [
+        ], [
             'final' => [
                 'include_screenshot' => false,
             ],
@@ -326,7 +315,7 @@ const verificationChannel = verificationRequired
           ? 'email'
           : (/text message|sms/i.test(bodyLower) ? 'sms' : 'code')))
   : '';
-const challenge = verificationRequired || /challenge|checkpoint|two_factor|suspended/i.test(`${location.pathname} ${bodyText}`);
+const challenge = verificationRequired || /challenge|checkpoint|two_factor|suspended/i.test(location.pathname + ' ' + bodyText);
 const alerts = Array.from(document.querySelectorAll('[role="alert"]')).map((node) => (node.innerText || '').trim()).filter(Boolean);
 const visibleButtons = Array.from(document.querySelectorAll('button')).map((node) => (node.innerText || '').trim()).filter(Boolean).slice(0, 20);
 const avatarLinks = Array.from(document.querySelectorAll('a[href]')).map((node) => node.getAttribute('href') || '').filter(Boolean);
@@ -346,7 +335,7 @@ const strongNavSelectors = [
 const strongNavMatches = strongNavSelectors.filter((selector) => document.querySelector(selector));
 const loginCopyDetected = /log into instagram|log in to instagram|mobile number, username or email|forgot password|log in with facebook|create new account|sign up/i.test(bodyLower);
 const storyViewerDetected = /^\/stories\//i.test(location.pathname) && /instagram/i.test(document.title) && !loginCopyDetected && !loginForm && !challenge;
-const connected = (strongNavMatches.length > 0 || storyViewerDetected) && !loginCopyDetected && !loginForm && !challenge && !/\/accounts\/login/i.test(location.pathname);
+const connected = (strongNavMatches.length > 0 || authenticatedMarkers.length >= 3 || storyViewerDetected) && !loginForm && !challenge && !/\/accounts\/login/i.test(location.pathname);
 
 return {
   url: location.href,
@@ -521,7 +510,7 @@ JS;
   const code = String(args?.code || '').trim();
   const visibleInputs = Array.from(document.querySelectorAll('input')).filter(isVisible).filter((node) => !node.disabled);
   const codeInput = document.querySelector('input[name="code"]')
-    || visibleInputs.find((node) => /code/i.test(`${node.name || ''} ${node.getAttribute('aria-label') || ''} ${node.getAttribute('placeholder') || ''}`))
+    || visibleInputs.find((node) => /code/i.test((node.name || '') + ' ' + (node.getAttribute('aria-label') || '') + ' ' + (node.getAttribute('placeholder') || '')))
     || visibleInputs.find((node) => ['text', 'tel', 'number', ''].includes((node.type || '').toLowerCase()));
 
   const summary = {
@@ -578,10 +567,10 @@ JS;
         $challenge = (bool) ($probe['challenge'] ?? false);
         $loginCopyDetected = (bool) ($probe['login_copy_detected'] ?? false);
         $strongNavCount = (int) ($probe['strong_nav_count'] ?? 0);
+        $authIndicatorCount = (int) ($probe['auth_indicator_count'] ?? 0);
         $storyViewerDetected = (bool) ($probe['story_viewer_detected'] ?? false);
         $alerts = $probe['alerts'] ?? [];
-        $connected = $probeConnected && !$loginForm && !$challenge && !$loginCopyDetected && ($strongNavCount > 0 || $storyViewerDetected);
-        $workerDetail = trim((string) ($result['detail'] ?? ''));
+        $connected = $probeConnected && !$loginForm && !$challenge && ($strongNavCount > 0 || $storyViewerDetected || $authIndicatorCount >= 3);
         $detail = $connected
             ? 'The browser session is authenticated and reached Instagram without a login form.'
             : ($verificationRequired
@@ -600,6 +589,8 @@ JS;
         if (!$connected && !empty($alerts)) {
             $detail .= ' Alerts: ' . implode(' | ', array_slice($alerts, 0, 3));
         }
+
+        $workerDetail = trim((string) ($result['detail'] ?? $result['message'] ?? ''));
 
         if (!$connected && $workerDetail !== '' && !str_contains($detail, $workerDetail)) {
             $detail .= ' Worker detail: ' . $workerDetail;
