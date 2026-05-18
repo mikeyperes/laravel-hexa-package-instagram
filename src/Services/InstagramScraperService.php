@@ -378,26 +378,33 @@ class InstagramScraperService
         ];
     }
 
+
     public static function profileProbeJs(): string
     {
         return <<<'JS'
 const limit = Math.max(1, Math.min(Number(args?.limit || 12), 30));
 const bodyText = (document.body?.innerText || '').trim();
+const normalizePostHref = (value) => {
+  const href = String(value || '').trim();
+  if (!href) return '';
+  try {
+    const url = new URL(href.startsWith('http') ? href : `https://www.instagram.com${href.startsWith('/') ? '' : '/'}${href}`);
+    const match = url.pathname.match(/^\/(?:[^/]+\/)?(p|reel|tv)\/([A-Za-z0-9._-]{5,20})\/?$/i);
+    if (!match) return '';
+    return `https://www.instagram.com/${match[1].toLowerCase()}/${match[2]}/`;
+  } catch (_error) {
+    return '';
+  }
+};
 const postLinks = Array.from(document.querySelectorAll('a[href]'))
-  .map((node) => node.getAttribute('href'))
-  .filter((href) => typeof href === 'string' && (
-    href.includes('/p/')
-    || href.includes('/reel/')
-    || href.includes('/tv/')
-  ))
-  .map((href) => href.startsWith('http') ? href : `https://www.instagram.com${href}`)
-  .map((href) => href.replace(/https:\/\/www\.instagram\.com\/[^/]+\/(p|reel|tv)\//, 'https://www.instagram.com/$1/'))
+  .map((node) => normalizePostHref(node.getAttribute('href')))
+  .filter(Boolean)
   .filter((value, index, array) => array.indexOf(value) === index)
   .slice(0, limit);
-const media = Array.from(document.querySelectorAll('img[src]'))
+const media = Array.from(document.querySelectorAll('img[src], img[srcset]'))
   .map((node) => ({
     alt: (node.getAttribute('alt') || '').trim(),
-    src: node.getAttribute('src'),
+    src: node.currentSrc || node.getAttribute('src') || '',
   }))
   .filter((entry) => entry.src)
   .slice(0, limit);
@@ -596,15 +603,53 @@ return {
 JS;
     }
 
+
     public static function postProbeJs(): string
     {
         return <<<'JS'
 const bodyText = (document.body?.innerText || '').trim();
 const timeNode = document.querySelector('time');
-const imageUrls = Array.from(document.querySelectorAll('article img[src], img[src]'))
-  .map((node) => node.getAttribute('src'))
+const canonical = document.querySelector('link[rel="canonical"]')?.getAttribute('href')
+  || document.querySelector('meta[property="og:url"]')?.getAttribute('content')
+  || '';
+const metaDescription = document.querySelector('meta[property="og:description"]')?.getAttribute('content')
+  || document.querySelector('meta[name="description"]')?.getAttribute('content')
+  || '';
+const ogImage = document.querySelector('meta[property="og:image"]')?.getAttribute('content') || '';
+const pickLargestSrcset = (srcset) => {
+  const value = String(srcset || '').trim();
+  if (!value) return '';
+  const candidates = value.split(',').map((part) => part.trim()).filter(Boolean).map((part) => {
+    const bits = part.split(/\s+/).filter(Boolean);
+    return {
+      url: bits[0] || '',
+      width: Number.parseInt((bits[1] || '').replace(/[^0-9]/g, ''), 10) || 0,
+    };
+  }).filter((entry) => entry.url);
+  if (!candidates.length) return '';
+  candidates.sort((a, b) => b.width - a.width);
+  return candidates[0].url;
+};
+const normalizeUrl = (value) => {
+  const url = String(value || '').trim();
+  if (!url) return '';
+  if (url.includes('static.cdninstagram.com/rsrc.php')) return '';
+  if (url.includes('profile_pic')) return '';
+  return url;
+};
+const imageUrls = Array.from(document.querySelectorAll('article img, img'))
+  .flatMap((node) => [
+    node.currentSrc || '',
+    node.getAttribute('src') || '',
+    pickLargestSrcset(node.getAttribute('srcset') || ''),
+  ])
+  .map((value) => normalizeUrl(value))
   .filter(Boolean)
   .filter((value, index, array) => array.indexOf(value) === index);
+if (normalizeUrl(ogImage)) {
+  imageUrls.unshift(normalizeUrl(ogImage));
+}
+const dedupedImageUrls = imageUrls.filter((value, index, array) => array.indexOf(value) === index);
 const videoUrls = Array.from(document.querySelectorAll('article video, article video source, video, video source'))
   .map((node) => node.currentSrc || node.getAttribute('src'))
   .filter(Boolean)
@@ -613,10 +658,47 @@ const captionBlocks = Array.from(document.querySelectorAll('article h1, article 
   .map((node) => (node.innerText || '').trim())
   .filter(Boolean)
   .filter((value, index, array) => array.indexOf(value) === index);
-const canonical = document.querySelector('link[rel="canonical"]')?.getAttribute('href') || '';
-const metaDescription = document.querySelector('meta[property="og:description"]')?.getAttribute('content')
-  || document.querySelector('meta[name="description"]')?.getAttribute('content')
-  || '';
+const mediaCandidates = Array.from((document.querySelector('article') || document.body || document.documentElement).querySelectorAll('img, video'))
+  .map((node) => {
+    const rect = node.getBoundingClientRect();
+    const style = window.getComputedStyle(node);
+    const source = normalizeUrl(node.currentSrc || node.getAttribute('src') || pickLargestSrcset(node.getAttribute('srcset') || ''));
+    const naturalWidth = Number(node.naturalWidth || node.videoWidth || 0);
+    const naturalHeight = Number(node.naturalHeight || node.videoHeight || 0);
+    return {
+      node,
+      rect,
+      source,
+      naturalWidth,
+      naturalHeight,
+      objectFit: style.objectFit || '',
+      area: Math.max(0, rect.width) * Math.max(0, rect.height),
+    };
+  })
+  .filter((entry) => entry.source && entry.area >= 40000 && entry.rect.width >= 150 && entry.rect.height >= 150 && entry.rect.bottom >= 0 && entry.rect.right >= 0)
+  .sort((a, b) => b.area - a.area);
+const primaryMedia = mediaCandidates[0] || null;
+const primaryMediaBox = primaryMedia ? {
+  viewport_left: Math.max(0, Math.round(primaryMedia.rect.left)),
+  viewport_top: Math.max(0, Math.round(primaryMedia.rect.top)),
+  viewport_width: Math.max(1, Math.round(primaryMedia.rect.width)),
+  viewport_height: Math.max(1, Math.round(primaryMedia.rect.height)),
+  page_left: Math.max(0, Math.round(primaryMedia.rect.left + (window.scrollX || window.pageXOffset || 0))),
+  page_top: Math.max(0, Math.round(primaryMedia.rect.top + (window.scrollY || window.pageYOffset || 0))),
+  source_url: primaryMedia.source,
+  natural_width: primaryMedia.naturalWidth,
+  natural_height: primaryMedia.naturalHeight,
+  object_fit: primaryMedia.objectFit,
+  viewport_inner_width: Math.max(1, Math.round(window.innerWidth || document.documentElement?.clientWidth || 0)),
+  viewport_inner_height: Math.max(1, Math.round(window.innerHeight || document.documentElement?.clientHeight || 0)),
+  document_scroll_width: Math.max(1, Math.round(document.documentElement?.scrollWidth || document.body?.scrollWidth || 0)),
+  document_scroll_height: Math.max(1, Math.round(document.documentElement?.scrollHeight || document.body?.scrollHeight || 0)),
+  scroll_x: Math.max(0, Math.round(window.scrollX || window.pageXOffset || 0)),
+  scroll_y: Math.max(0, Math.round(window.scrollY || window.pageYOffset || 0)),
+  device_pixel_ratio: Number(window.devicePixelRatio || 1),
+  tag: (primaryMedia.node?.tagName || '').toLowerCase(),
+} : null;
+const primaryMediaUrl = primaryMediaBox?.source_url || '';
 
 return {
   url: location.href,
@@ -624,20 +706,50 @@ return {
   title: document.title,
   posted_at: timeNode?.getAttribute('datetime') || '',
   time_text: (timeNode?.innerText || '').trim(),
-  image_urls: imageUrls,
+  image_urls: primaryMediaUrl ? [primaryMediaUrl, ...dedupedImageUrls.filter((value) => value !== primaryMediaUrl)] : dedupedImageUrls,
   video_urls: videoUrls,
   caption_blocks: captionBlocks.slice(0, 12),
   meta_description: metaDescription,
   body_excerpt: bodyText.slice(0, 3000),
+  primary_media_url: primaryMediaUrl,
+  primary_media_box: primaryMediaBox,
+  page_width: Math.max(1, Math.round(document.documentElement?.scrollWidth || document.body?.scrollWidth || window.innerWidth || 0)),
+  page_height: Math.max(1, Math.round(document.documentElement?.scrollHeight || document.body?.scrollHeight || window.innerHeight || 0)),
+  viewport_width: Math.max(1, Math.round(window.innerWidth || document.documentElement?.clientWidth || 0)),
+  viewport_height: Math.max(1, Math.round(window.innerHeight || document.documentElement?.clientHeight || 0)),
 };
 JS;
     }
 
+
+    private function isUsablePostScanPayload(array $scan): bool
+    {
+        $canonicalUrl = $this->normalizePostUrl((string) ($scan["canonical_url"] ?? ""));
+        $imageUrls = array_values(array_filter(array_map("strval", (array) ($scan["image_urls"] ?? [])), static fn (string $value): bool => trim($value) !== ""));
+        $videoUrls = array_values(array_filter(array_map("strval", (array) ($scan["video_urls"] ?? [])), static fn (string $value): bool => trim($value) !== ""));
+        $captionBlocks = array_values(array_filter(array_map(static fn ($value): string => trim((string) $value), (array) ($scan["caption_blocks"] ?? [])), static fn (string $value): bool => $value !== ""));
+        $metaDescription = trim((string) ($scan["meta_description"] ?? ""));
+        $bodyExcerpt = trim((string) ($scan["body_excerpt"] ?? ""));
+        $title = trim((string) ($scan["title"] ?? ""));
+        $normalizedTitle = strtolower($title);
+        $genericTitles = ["instagram", "instagram • photos and videos"];
+        $hasMeaningfulTitle = $title !== "" && !in_array($normalizedTitle, $genericTitles, true);
+        $hasReadableBody = strlen($bodyExcerpt) >= 80;
+
+        return $canonicalUrl !== ""
+            || $imageUrls !== []
+            || $videoUrls !== []
+            || $captionBlocks !== []
+            || $metaDescription !== ""
+            || $hasMeaningfulTitle
+            || $hasReadableBody;
+    }
+
     private function resultByLabel(array $result, string $label): array
     {
-        foreach (($result['data']['results'] ?? []) as $step) {
-            if (($step['label'] ?? null) === $label && is_array($step['result'] ?? null)) {
-                return $step['result'];
+        foreach (($result["data"]["results"] ?? []) as $step) {
+            if (($step["label"] ?? null) === $label && is_array($step["result"] ?? null)) {
+                return $step["result"];
             }
         }
 
@@ -659,15 +771,12 @@ JS;
             return '';
         }
 
-        if (preg_match('~https?://(www\.)?instagram\.com/([^/]+)/(p|reel|tv)/([^/?#]+)/?$~i', $url, $match)) {
-            return 'https://www.instagram.com/' . strtolower($match[3]) . '/' . $match[4] . '/';
+        $path = (string) parse_url($url, PHP_URL_PATH);
+        if (preg_match('~/(?:[^/]+/)?(p|reel|tv)/([A-Za-z0-9_-]{5,20})(?:/|$)~i', $path, $match)) {
+            return 'https://www.instagram.com/' . strtolower((string) $match[1]) . '/' . (string) $match[2] . '/';
         }
 
-        if (preg_match('~https?://(www\.)?instagram\.com/(p|reel|tv)/([^/?#]+)/?$~i', $url, $match)) {
-            return 'https://www.instagram.com/' . strtolower($match[2]) . '/' . $match[3] . '/';
-        }
-
-        return rtrim($url, '/') . '/';
+        return '';
     }
 
     private function failure(string $message, string $detail): array

@@ -2,7 +2,7 @@
 
 return [
     'enabled' => env('INSTAGRAM_ENABLED', true),
-    'version' => '1.0.12',
+    'version' => '1.0.13',
     'defaults' => [
         'session_profile' => env('INSTAGRAM_SESSION_PROFILE', 'instagram-main'),
         'default_profile_username' => env('INSTAGRAM_DEFAULT_PROFILE_USERNAME', ''),
