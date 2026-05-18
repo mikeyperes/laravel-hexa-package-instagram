@@ -4,3 +4,8 @@
 /worker/.session/
 error_log
 /worker/.wwebjs_cache/
+
+# Runtime artifacts + edit backups (preserved on disk, not tracked)
+*.bak
+*.bak-*
+*.bak_*
