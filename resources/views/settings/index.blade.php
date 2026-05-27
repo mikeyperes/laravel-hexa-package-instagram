@@ -55,23 +55,36 @@
         <div class="flex items-start justify-between gap-3 flex-wrap">
             <div>
                 <h2 class="text-lg font-semibold text-gray-900">Connection Test</h2>
-                <p class="mt-1 text-sm text-gray-500">Pick a saved account, prove the attached browser session is connected, then sample its following graph and recent posts/stories.</p>
+                <p class="mt-1 text-sm text-gray-500">Pick a saved account, verify the attached browser session, reconnect it if needed, then run the deeper content probe.</p>
             </div>
-            <button type="button" @click="runTest()" :disabled="testing || !testProfile"
-                    class="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50">
-                <span x-show="!testing">Run Connection Test</span>
-                <span x-show="testing" x-cloak>Testing…</span>
-            </button>
+            <div class="flex items-center gap-2 flex-wrap">
+                <button type="button" @click="checkStatus()" :disabled="sessionBusy() || !testProfile"
+                        class="inline-flex items-center px-4 py-2 bg-white border border-gray-300 text-sm font-medium rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                    <span x-text="statusActionLabel()"></span>
+                </button>
+                <button type="button" @click="reconnect()" :disabled="sessionBusy() || !testProfile"
+                        class="inline-flex items-center px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 disabled:opacity-50">
+                    <span x-text="reconnectActionLabel()"></span>
+                </button>
+                <button type="button" @click="runTest()" :disabled="testing || sessionBusy() || !testProfile"
+                        class="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50">
+                    <span x-show="!testing">Run Full Test</span>
+                    <span x-show="testing" x-cloak>Testing…</span>
+                </button>
+            </div>
         </div>
 
-        <div>
-            <label class="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Saved account to test</label>
-            <select x-model="testProfile" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white">
-                <option value="">Select a saved Instagram account</option>
-                @foreach($status['accounts'] as $account)
-                    <option value="{{ $account['profile'] }}">{{ $account['label'] }} — {{ $account['instagram_username'] ?: $account['profile'] }}</option>
-                @endforeach
-            </select>
+        <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_auto] gap-3 items-end">
+            <div>
+                <label class="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Saved account to test</label>
+                <select x-model="testProfile" @change="clearSessionResult()" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white">
+                    <option value="">Select a saved Instagram account</option>
+                    @foreach($status['accounts'] as $account)
+                        <option value="{{ $account['profile'] }}">{{ $account['label'] }} — {{ $account['instagram_username'] ?: $account['profile'] }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <a href="{{ route('instagram.accounts') }}" class="inline-flex items-center justify-center px-4 py-2 bg-white border border-gray-300 text-sm font-medium rounded-lg text-gray-700 hover:bg-gray-50">Manage accounts</a>
         </div>
 
         <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
@@ -103,6 +116,28 @@
                         </div>
                     </div>
                 </template>
+
+
+                <div class="rounded-lg border p-4 space-y-3" :class="isSessionConnected() ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'" x-show="testResult || testProfile" x-cloak>
+                    <div class="flex items-start justify-between gap-3 flex-wrap">
+                        <div>
+                            <div class="text-xs uppercase tracking-wide text-gray-500">Next step</div>
+                            <div class="mt-1 text-sm font-semibold" :class="isSessionConnected() ? 'text-emerald-800' : 'text-amber-900'" x-text="recoveryTitle()"></div>
+                            <p class="mt-1 text-sm" :class="isSessionConnected() ? 'text-emerald-800' : 'text-amber-800'" x-text="recoveryDetail()"></p>
+                        </div>
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <button type="button" @click="checkStatus()" :disabled="sessionBusy() || !testProfile" class="inline-flex items-center px-3 py-2 bg-white border border-gray-300 text-xs font-medium rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-50" x-text="statusActionLabel()"></button>
+                            <button type="button" @click="reconnect()" :disabled="sessionBusy() || !testProfile" class="inline-flex items-center px-3 py-2 bg-emerald-600 text-white text-xs font-medium rounded-lg hover:bg-emerald-700 disabled:opacity-50" x-text="reconnectActionLabel()"></button>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_auto] gap-2 items-end" x-show="needsVerificationCode()" x-cloak>
+                        <div>
+                            <label class="block text-xs font-semibold uppercase tracking-wide text-amber-700 mb-1" x-text="verificationLabel()"></label>
+                            <input type="text" inputmode="numeric" x-model="verificationCode" class="w-full border border-amber-300 rounded-lg px-3 py-2 text-sm bg-white" placeholder="Enter the code from Instagram">
+                        </div>
+                        <button type="button" @click="submitVerificationCode()" :disabled="sessionBusy() || !(verificationCode || '').trim()" class="inline-flex items-center justify-center px-4 py-2 bg-amber-600 text-white text-sm font-medium rounded-lg hover:bg-amber-700 disabled:opacity-50" x-text="submitCodeActionLabel()"></button>
+                    </div>
+                </div>
 
                 <details class="rounded-lg border border-gray-200 bg-white" x-show="testResult?.data?.following_sample" x-cloak>
                     <summary class="cursor-pointer px-3 py-2 text-sm font-medium text-gray-800">Following / posts / story sample</summary>
@@ -225,6 +260,8 @@ function instagramSettingsPage() {
         },
         saving: false,
         testing: false,
+        sessionAction: '',
+        verificationCode: '',
         testProfile: @json($status['active_profile']),
         testResult: null,
         testLog: [],
@@ -284,6 +321,143 @@ function instagramSettingsPage() {
             } finally {
                 this.saving = false;
             }
+        },
+
+        async request(url, options = {}) {
+            const init = { ...options };
+            const headers = { "Accept": "application/json", ...(init.headers || {}) };
+            const method = String(init.method || "GET").toUpperCase();
+            if (method !== "GET") headers["X-CSRF-TOKEN"] = this.csrfToken();
+            if (init.body && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
+            init.headers = headers;
+
+            const response = await fetch(url, init);
+            const raw = await response.text();
+            let data;
+            try { data = raw ? JSON.parse(raw) : {}; } catch (error) { data = { success: false, message: "Request did not return JSON.", detail: raw.slice(0, 1000) }; }
+            return { response, data };
+        },
+
+
+
+        sessionBusy() {
+            return this.sessionAction !== '' || this.testing;
+        },
+
+        statusActionLabel() {
+            return this.sessionAction === 'status' ? 'Checking status...' : 'Check status';
+        },
+
+        reconnectActionLabel() {
+            return this.sessionAction === 'reconnect' ? 'Reconnecting...' : 'Reconnect with saved credentials';
+        },
+
+        submitCodeActionLabel() {
+            return this.sessionAction === 'submitCode' ? 'Submitting code...' : 'Submit verification code';
+        },
+
+        clearSessionResult() {
+            this.testResult = null;
+            this.verificationCode = '';
+        },
+
+        sessionStatusData() {
+            return this.testResult?.data?.instagram_status?.data || {};
+        },
+
+        isSessionConnected() {
+            return Boolean(this.sessionStatusData().connected);
+        },
+
+        needsVerificationCode() {
+            return Boolean(this.sessionStatusData().verification_required);
+        },
+
+        verificationLabel() {
+            const channel = this.sessionStatusData().verification_channel || 'code';
+            if (channel === 'email') return 'Instagram email code';
+            if (channel === 'whatsapp') return 'Instagram WhatsApp code';
+            if (channel === 'sms') return 'Instagram SMS code';
+            return 'Instagram verification code';
+        },
+
+        recoveryTitle() {
+            const state = this.sessionStatusData();
+            if (state.connected) return 'Connected. You can run the full content test.';
+            if (state.verification_required) return 'Verification code required.';
+            if (state.challenge) return 'Instagram challenge/checkpoint is blocking this session.';
+            if (state.login_form) return 'Browser is at the Instagram login screen.';
+            if (this.testResult) return 'Reconnect this account from here.';
+            return 'Start by checking status or reconnecting.';
+        },
+
+        recoveryDetail() {
+            const state = this.sessionStatusData();
+            if (state.connected) return 'The attached browser session is authenticated. Use Run Full Test only when you need the deeper following/posts/stories sample.';
+            if (state.verification_required) return 'Enter the code Instagram sent, then submit it here. Do not leave this page to guess the next step.';
+            if (state.challenge) return 'Finish the challenge in the attached browser/Instagram, then click Check status again.';
+            if (state.login_form) return 'Click Reconnect with saved credentials to submit the saved username and password into this browser profile.';
+            return 'Click Reconnect with saved credentials. This uses the saved account password and updates the result/log on this page.';
+        },
+
+        wrapSessionPayload(data) {
+            const account = this.selectedAccount();
+            return {
+                success: Boolean(data?.success && data?.data?.connected),
+                message: data?.message || 'Instagram session action completed.',
+                detail: data?.detail || '',
+                status_code: data?.status_code || 0,
+                data: {
+                    instagram_status: data,
+                    selected_account: account,
+                },
+            };
+        },
+
+        async sessionRequest(action, label, url, options = {}) {
+            if (!this.testProfile) {
+                this.showToast('Select a saved Instagram account first.', 'error');
+                return;
+            }
+            this.sessionAction = action;
+            this.log('info', label + ' for ' + this.testProfile + '.');
+            try {
+                const { response, data } = await this.request(url, options);
+                this.testResult = this.wrapSessionPayload(data);
+                this.log(response.ok && data.success ? 'success' : 'error', label + ' finished for ' + this.testProfile + '.', {
+                    message: data.message || '',
+                    detail: data.detail || '',
+                });
+                this.showToast(data.message || (response.ok ? label + ' finished.' : label + ' failed.'), response.ok && data.success ? 'success' : 'error');
+            } catch (error) {
+                this.testResult = { success: false, message: label + ' failed.', detail: error?.message || String(error), data: { selected_account: this.selectedAccount(), instagram_status: { data: {} } } };
+                this.log('error', label + ' request failed for ' + this.testProfile + '.', error?.message || String(error));
+                this.showToast(label + ' failed.', 'error');
+            } finally {
+                this.sessionAction = '';
+            }
+        },
+
+        async checkStatus() {
+            const url = new URL('{{ route("instagram.accounts.status") }}', window.location.origin);
+            url.searchParams.set('profile', this.testProfile || '');
+            await this.sessionRequest('status', 'Instagram status check', url.toString());
+        },
+
+        async reconnect() {
+            await this.sessionRequest('reconnect', 'Instagram reconnect', '{{ route("instagram.accounts.login") }}', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ profile: this.testProfile }),
+            });
+        },
+
+        async submitVerificationCode() {
+            await this.sessionRequest('submitCode', 'Instagram verification code submit', '{{ route("instagram.accounts.submit-code") }}', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ profile: this.testProfile, code: this.verificationCode || '' }),
+            });
         },
 
         async runTest() {

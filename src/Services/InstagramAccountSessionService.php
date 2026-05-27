@@ -122,6 +122,8 @@ class InstagramAccountSessionService
             ]);
         }
 
+        $profileRestart = $this->restartBrowserProfile($resolved);
+
         $result = $this->browser->runAutomation($resolved, [
             [
                 'type' => 'goto',
@@ -176,7 +178,10 @@ class InstagramAccountSessionService
             ],
         ]);
 
-        return $this->normalizeStatusResult($resolved, $result, 'Instagram login flow finished.');
+        $response = $this->normalizeStatusResult($resolved, $result, 'Instagram login flow finished.');
+        $response['data']['profile_restart'] = $profileRestart;
+
+        return $response;
     }
 
     public function submitVerificationCode(?string $profile, string $code): array
@@ -566,6 +571,14 @@ JS;
         $verificationChannel = (string) ($probe['verification_channel'] ?? '');
         $challenge = (bool) ($probe['challenge'] ?? false);
         $loginCopyDetected = (bool) ($probe['login_copy_detected'] ?? false);
+        $workerData = $result['data'] ?? [];
+        $finalUrl = '';
+        if (is_array($workerData)) {
+            $finalUrl = strtolower((string) (($workerData['final']['final_url'] ?? '') ?: ($workerData['current_url'] ?? '')));
+        }
+        if (str_contains($finalUrl, '/challenge') || str_contains($finalUrl, '/checkpoint') || str_contains($finalUrl, '/auth_platform/')) {
+            $challenge = true;
+        }
         $strongNavCount = (int) ($probe['strong_nav_count'] ?? 0);
         $authIndicatorCount = (int) ($probe['auth_indicator_count'] ?? 0);
         $storyViewerDetected = (bool) ($probe['story_viewer_detected'] ?? false);
@@ -625,6 +638,19 @@ JS;
         }
 
         return [];
+    }
+
+    private function restartBrowserProfile(string $profile): array
+    {
+        $closed = $this->browser->closeProfile($profile);
+        usleep(350000);
+        $launched = $this->browser->launchProfile($profile);
+        usleep(600000);
+
+        return [
+            "closed" => $closed,
+            "launched" => $launched,
+        ];
     }
 
     private function failure(string $message, string $detail, array $data = []): array
