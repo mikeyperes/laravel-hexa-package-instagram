@@ -18,6 +18,9 @@ Route::middleware(['web', 'auth', 'locked', 'system_lock', 'two_factor', 'role']
     Route::post('/instagram/accounts/login', [InstagramAccountsController::class, 'login'])->name('instagram.accounts.login');
     Route::get('/instagram/accounts/status', [InstagramAccountsController::class, 'status'])->name('instagram.accounts.status');
     Route::post('/instagram/accounts/submit-code', [InstagramAccountsController::class, 'submitVerificationCode'])->name('instagram.accounts.submit-code');
+    Route::post('/instagram/accounts/worker-screen', [InstagramAccountsController::class, 'workerScreen'])->name('instagram.accounts.worker-screen');
+    Route::post('/instagram/accounts/worker-click', [InstagramAccountsController::class, 'workerClick'])->name('instagram.accounts.worker-click');
+    Route::post('/instagram/accounts/worker-reload', [InstagramAccountsController::class, 'workerReload'])->name('instagram.accounts.worker-reload');
     Route::post('/instagram/accounts/logout', [InstagramAccountsController::class, 'logout'])->name('instagram.accounts.logout');
     Route::delete('/instagram/accounts', [InstagramAccountsController::class, 'destroy'])->name('instagram.accounts.destroy');
 

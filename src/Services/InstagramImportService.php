@@ -29,8 +29,8 @@ class InstagramImportService
         $trace[0]['result'] = 'ok';
         $trace[0]['normalized_url'] = $normalized;
 
-        $token = $this->credentials->get('instagram', 'meta_access_token');
-        $trace[] = ['step' => 'instagram.token', 'has_token' => (bool) $token];
+        [$token, $tokenSource] = $this->resolveMetaAccessToken();
+        $trace[] = ['step' => 'instagram.token', 'has_token' => (bool) $token, 'token_source' => $tokenSource];
 
         $result = null;
         $fallback = null;
@@ -88,7 +88,9 @@ class InstagramImportService
 
     public function testToken(?string $token = null): array
     {
-        $token ??= $this->credentials->get('instagram', 'meta_access_token');
+        if ($token === null) {
+            [$token] = $this->resolveMetaAccessToken();
+        }
         if (!$token) {
             return ['success' => false, 'message' => 'No Instagram / Meta access token stored.'];
         }
@@ -100,6 +102,21 @@ class InstagramImportService
         }
 
         return ['success' => false, 'message' => $result['message'] ?? 'Instagram token test failed.'];
+    }
+
+    private function resolveMetaAccessToken(): array
+    {
+        $token = $this->credentials->get('instagram', 'meta_access_token');
+        if ($token) {
+            return [$token, 'instagram.meta_access_token'];
+        }
+
+        $token = $this->credentials->get('content_extractor', 'instagram_access_token');
+        if ($token) {
+            return [$token, 'content_extractor.instagram_access_token'];
+        }
+
+        return [null, null];
     }
 
     private function importViaOembed(string $url, string $token): array

@@ -3,20 +3,27 @@
 namespace hexa_package_instagram\Domains\Accounts\Http\Controllers;
 
 use hexa_core\Models\ActivityLog;
+use hexa_package_browser_console\Services\BrowserConsoleRuntimeService;
 use hexa_package_browser_worker\Contracts\BrowserWorkerBridgeContract;
+use hexa_package_proxy\Services\DecodoApiClient;
+use hexa_package_proxy\Domains\Config\ProxyConfigRepository;
+use hexa_package_browser_worker\Services\BrowserProxyConfigWriter;
 use hexa_package_instagram\Domains\Config\InstagramConfigRepository;
 use hexa_package_instagram\Services\InstagramAccountSessionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use Illuminate\Support\Facades\Cache;
 
 class InstagramAccountsController extends Controller
 {
-    public function index(InstagramConfigRepository $config, InstagramAccountSessionService $sessions)
+    public function index(InstagramConfigRepository $config, InstagramAccountSessionService $sessions, BrowserConsoleRuntimeService $browserConsole)
     {
         return view('instagram::accounts.index', [
             'settings' => $config->all(),
             'status' => $this->statusPayload($config, $sessions),
+            'browserConsole' => $browserConsole->status(),
+            'runtimeReports' => $this->runtimeReports($config),
         ]);
     }
 
@@ -141,6 +148,39 @@ class InstagramAccountsController extends Controller
         return response()->json($result);
     }
 
+    public function workerScreen(Request $request, InstagramConfigRepository $config, InstagramAccountSessionService $sessions): JsonResponse
+    {
+        $validated = $request->validate([
+            'profile' => ['nullable', 'string', 'max:80', 'regex:/^[A-Za-z0-9._-]+$/'],
+        ]);
+
+        return response()->json($sessions->workerScreen($config->resolveProfile($validated['profile'] ?? null)));
+    }
+
+    public function workerClick(Request $request, InstagramConfigRepository $config, InstagramAccountSessionService $sessions): JsonResponse
+    {
+        $validated = $request->validate([
+            'profile' => ['nullable', 'string', 'max:80', 'regex:/^[A-Za-z0-9._-]+$/'],
+            'x' => ['required', 'numeric', 'min:0', 'max:5000'],
+            'y' => ['required', 'numeric', 'min:0', 'max:5000'],
+        ]);
+
+        return response()->json($sessions->clickWorkerScreen(
+            $config->resolveProfile($validated['profile'] ?? null),
+            (float) $validated['x'],
+            (float) $validated['y']
+        ));
+    }
+
+    public function workerReload(Request $request, InstagramConfigRepository $config, InstagramAccountSessionService $sessions): JsonResponse
+    {
+        $validated = $request->validate([
+            'profile' => ['nullable', 'string', 'max:80', 'regex:/^[A-Za-z0-9._-]+$/'],
+        ]);
+
+        return response()->json($sessions->reloadWorkerScreen($config->resolveProfile($validated['profile'] ?? null)));
+    }
+
     public function destroy(Request $request, InstagramConfigRepository $config, InstagramAccountSessionService $sessions, BrowserWorkerBridgeContract $browser): JsonResponse
     {
         $validated = $request->validate([
@@ -162,6 +202,116 @@ class InstagramAccountsController extends Controller
             'settings' => $settings,
             'status' => $this->statusPayload($config, $sessions),
         ]);
+    }
+
+    private function runtimeReports(InstagramConfigRepository $config): array
+    {
+        $settings = $config->all();
+        $accounts = (array) ($settings["accounts"] ?? []);
+        $activeProfile = (string) ($settings["session_profile"] ?? "");
+        $reports = [];
+        $workerProfiles = [];
+        $proxyState = [];
+        $profilesByKey = [];
+
+        try {
+            if (class_exists(BrowserProxyConfigWriter::class)) {
+                $workerStatus = app(BrowserProxyConfigWriter::class)->status();
+                foreach ((array) ($workerStatus["profiles"] ?? []) as $profile) {
+                    $workerProfiles[(string) ($profile["browser_profile"] ?? "")] = (array) $profile;
+                }
+            }
+        } catch (\Throwable) {
+            $workerProfiles = [];
+        }
+
+        try {
+            if (class_exists(ProxyConfigRepository::class)) {
+                $proxyState = app(ProxyConfigRepository::class)->all();
+                $profilesByKey = (array) ($proxyState["profiles_by_key"] ?? []);
+            }
+        } catch (\Throwable) {
+            $proxyState = [];
+            $profilesByKey = [];
+        }
+
+        $direct = Cache::remember("instagram_accounts_runtime_direct_ip", now()->addMinutes(3), function (): array {
+            if (!class_exists(DecodoApiClient::class)) {
+                return ["success" => false, "data" => ["ip" => ""]];
+            }
+
+            return app(DecodoApiClient::class)->directIp();
+        });
+
+        foreach ($accounts as $account) {
+            $browserProfile = (string) ($account["profile"] ?? "");
+            $worker = (array) ($workerProfiles[$browserProfile] ?? []);
+            $profileKey = trim((string) ($worker["profile_key"] ?? ""));
+            if ($profileKey === "") {
+                $profileKey = (string) ($proxyState["active_profile_key"] ?? "");
+            }
+            $masked = $profileKey !== "" && isset($profilesByKey[$profileKey]) ? (array) $profilesByKey[$profileKey] : [];
+            $server = (string) ($worker["server"] ?? "");
+            if ($server === "" && $masked !== []) {
+                $server = (string) (($masked["protocol"] ?? "http") . "://" . ($masked["proxy_host"] ?? "") . ":" . ($masked["proxy_port"] ?? ""));
+            }
+
+            $proxyResult = ["success" => false, "message" => "Proxy was not verified.", "data" => ["ip" => ""]];
+            $identity = ["success" => false, "data" => []];
+            if ($profileKey !== "" && class_exists(ProxyConfigRepository::class) && class_exists(DecodoApiClient::class)) {
+                $cacheKey = "instagram_accounts_runtime_proxy_" . md5($profileKey . "|" . $server);
+                $proxyBundle = Cache::remember($cacheKey, now()->addMinutes(3), function () use ($profileKey): array {
+                    try {
+                        $repo = app(ProxyConfigRepository::class);
+                        $decodo = app(DecodoApiClient::class);
+                        $profile = $repo->profileWithSecrets($profileKey);
+                        $proxy = $decodo->testProxy($profile);
+                        $proxyIp = (string) data_get($proxy, "data.ip", "");
+                        $identity = $proxyIp !== "" ? $decodo->ipIdentity($proxyIp) : ["success" => false, "data" => []];
+                        return ["proxy" => $proxy, "identity" => $identity];
+                    } catch (\Throwable $e) {
+                        return ["proxy" => ["success" => false, "message" => $e->getMessage(), "data" => ["ip" => ""]], "identity" => ["success" => false, "data" => []]];
+                    }
+                });
+                $proxyResult = (array) ($proxyBundle["proxy"] ?? $proxyResult);
+                $identity = (array) ($proxyBundle["identity"] ?? $identity);
+            }
+
+            $reports[$browserProfile] = [
+                "browser" => [
+                    "profile" => $browserProfile,
+                    "active" => $browserProfile === $activeProfile,
+                    "account_label" => (string) ($account["label"] ?? $browserProfile),
+                    "instagram_username" => (string) ($account["instagram_username"] ?? ""),
+                ],
+                "proxy" => [
+                    "profile_key" => $profileKey,
+                    "name" => (string) ($masked["name"] ?? ($profileKey ?: "No proxy profile selected")),
+                    "server" => $server,
+                    "auth_mode" => (string) ($worker["proxy_auth_mode"] ?? ($masked["proxy_auth_mode"] ?? "")),
+                    "endpoint_mode" => (string) ($worker["endpoint_mode"] ?? ($masked["endpoint_mode"] ?? "")),
+                    "country" => (string) ($worker["country"] ?? ($masked["country"] ?? "")),
+                    "state" => (string) ($worker["state"] ?? ($masked["state"] ?? "")),
+                    "city" => (string) ($worker["city"] ?? ($masked["city"] ?? "")),
+                    "updated_at" => (string) ($worker["updated_at"] ?? ""),
+                ],
+                "direct_ip" => (string) data_get($direct, "data.ip", ""),
+                "proxy_ip" => (string) data_get($proxyResult, "data.ip", ""),
+                "proxy_ok" => (bool) ($proxyResult["success"] ?? false) && (string) data_get($proxyResult, "data.ip", "") !== "",
+                "proxy_message" => (string) ($proxyResult["message"] ?? ""),
+                "identity" => [
+                    "country" => (string) data_get($identity, "data.country", ""),
+                    "region" => (string) data_get($identity, "data.region", ""),
+                    "city" => (string) data_get($identity, "data.city", ""),
+                    "org" => (string) data_get($identity, "data.org", ""),
+                    "isp" => (string) data_get($identity, "data.isp", ""),
+                    "is_decodo" => (bool) data_get($identity, "data.is_decodo", false),
+                ],
+                "checked_at" => now()->toIso8601String(),
+            ];
+        }
+
+        return $reports;
     }
 
     private function statusPayload(InstagramConfigRepository $config, InstagramAccountSessionService $sessions): array

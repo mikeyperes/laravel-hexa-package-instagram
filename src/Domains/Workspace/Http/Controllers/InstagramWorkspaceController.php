@@ -146,6 +146,15 @@ class InstagramWorkspaceController extends Controller
         $settings = $config->all();
         $credentialKey = 'cred_instagram_meta_access_token';
         $credentialRow = Setting::query()->where('key', $credentialKey)->first();
+        $hasMetaToken = $credentials->exists('instagram', 'meta_access_token');
+        $metaTokenMasked = $credentials->getMasked('instagram', 'meta_access_token');
+
+        if (!$hasMetaToken && $credentials->exists('content_extractor', 'instagram_access_token')) {
+            $credentialKey = 'cred_content_extractor_instagram_access_token';
+            $credentialRow = Setting::query()->where('key', $credentialKey)->first();
+            $hasMetaToken = true;
+            $metaTokenMasked = $credentials->getMasked('content_extractor', 'instagram_access_token');
+        }
         $activeProfile = $config->resolveProfile($request->query('profile') ?: $request->input('profile'));
         $activeAccount = $config->findAccount($activeProfile);
 
@@ -156,8 +165,8 @@ class InstagramWorkspaceController extends Controller
             'default_profile_username' => $settings['default_profile_username'],
             'default_story_username' => $settings['default_story_username'],
             'default_post_url' => $settings['default_post_url'],
-            'has_meta_token' => $credentials->exists('instagram', 'meta_access_token'),
-            'meta_token_masked' => $credentials->getMasked('instagram', 'meta_access_token'),
+            'has_meta_token' => $hasMetaToken,
+            'meta_token_masked' => $metaTokenMasked,
             'credential_key' => $credentialKey,
             'credential_updated_at' => $credentialRow?->updated_at?->toDateTimeString(),
             'package_version' => (string) config('instagram.version', '1.0.0'),

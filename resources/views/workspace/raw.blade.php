@@ -47,6 +47,8 @@
                 <button type="button" @click="loadLogs()" :disabled="loading.logs" class="inline-flex items-center px-4 py-2 bg-white border border-gray-300 text-sm font-medium rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-50">
                     <span x-text="loading.logs ? 'Loading logs...' : 'Refresh logs'"></span>
                 </button>
+                <a href='/instagram/accounts' target='_blank' rel='noopener' class='inline-flex items-center px-4 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700'>Connect / reconnect account &nearr;</a>
+                <a href='/settings/instagram' target='_blank' rel='noopener' class='inline-flex items-center px-4 py-2 bg-white border border-gray-300 text-sm font-medium rounded-lg text-gray-700 hover:bg-gray-50'>Connection settings &nearr;</a>
             </div>
         </div>
 
@@ -73,6 +75,38 @@
             </div>
         </div>
 
+        <template x-if='!statusPayload.data?.connected'>
+            <div class='rounded-xl border border-amber-200 bg-amber-50 p-5 space-y-4'>
+                <div class='flex items-start justify-between gap-4 flex-wrap'>
+                    <div>
+                        <div class='text-sm font-semibold text-amber-950'>Raw connection recovery</div>
+                        <p class='mt-1 text-sm text-amber-900'>This account is not connected. Use the account recovery page to run the saved-credential login, submit any Instagram code, or clear the browser session. Return here and refresh status after the recovery step.</p>
+                    </div>
+                    <div class='flex items-center gap-2 flex-wrap'>
+                        <a href='/instagram/accounts' target='_blank' rel='noopener' class='inline-flex items-center px-4 py-2 rounded-lg bg-emerald-600 text-sm font-semibold text-white hover:bg-emerald-700'>Connect / reconnect account &nearr;</a>
+                        <a href='/settings/instagram' target='_blank' rel='noopener' class='inline-flex items-center px-4 py-2 rounded-lg border border-amber-300 bg-white text-sm font-semibold text-amber-900 hover:bg-amber-100'>Open connection settings &nearr;</a>
+                        <a href='https://www.instagram.com/accounts/login/' target='_blank' rel='noopener' class='inline-flex items-center px-4 py-2 rounded-lg border border-amber-300 bg-white text-sm font-semibold text-amber-900 hover:bg-amber-100'>Open Instagram login &nearr;</a>
+                    </div>
+                </div>
+                <div class='grid gap-3 md:grid-cols-3'>
+                    <div class='rounded-lg border border-amber-200 bg-white px-4 py-3'>
+                        <div class='text-xs uppercase tracking-wide text-gray-500'>Step 1</div>
+                        <div class='mt-1 text-sm font-semibold text-gray-900'>Open Accounts recovery</div>
+                        <div class='mt-1 text-xs text-gray-600'>Select this profile and run Log in with saved credentials.</div>
+                    </div>
+                    <div class='rounded-lg border border-amber-200 bg-white px-4 py-3'>
+                        <div class='text-xs uppercase tracking-wide text-gray-500'>Step 2</div>
+                        <div class='mt-1 text-sm font-semibold text-gray-900'>Handle code or challenge</div>
+                        <div class='mt-1 text-xs text-gray-600'>Submit any Instagram verification code or clear the stale browser session there.</div>
+                    </div>
+                    <div class='rounded-lg border border-amber-200 bg-white px-4 py-3'>
+                        <div class='text-xs uppercase tracking-wide text-gray-500'>Step 3</div>
+                        <div class='mt-1 text-sm font-semibold text-gray-900'>Refresh raw status</div>
+                        <div class='mt-1 text-xs text-gray-600'>The raw workspace should turn connected before scans are run.</div>
+                    </div>
+                </div>
+            </div>
+        </template>
         <template x-if="statusPayload.data?.worker?.final?.screenshot_data_url">
             <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
                 <div class="text-sm font-medium text-slate-900">Latest browser screenshot</div>

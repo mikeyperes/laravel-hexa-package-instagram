@@ -51,6 +51,7 @@ class InstagramScraperService
                 'args' => ['limit' => max(1, min($limit, 30))],
             ],
         ], [
+            'transport_timeout_ms' => max(90000, ($limit * 4000)),
             'final' => [
                 'include_screenshot' => true,
             ],
@@ -205,6 +206,7 @@ class InstagramScraperService
                 ],
             ],
         ], [
+            'transport_timeout_ms' => 90000,
             'final' => [
                 'include_screenshot' => true,
             ],
@@ -273,6 +275,7 @@ class InstagramScraperService
                 'code' => self::storyProbeJs(),
             ],
         ], [
+            'transport_timeout_ms' => 90000,
             'final' => [
                 'include_screenshot' => true,
             ],
@@ -341,6 +344,7 @@ class InstagramScraperService
                 'code' => self::postProbeJs(),
             ],
         ], [
+            'transport_timeout_ms' => 90000,
             'final' => [
                 'include_screenshot' => true,
             ],
