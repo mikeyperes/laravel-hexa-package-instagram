@@ -1,23 +1,26 @@
 {
-    "name": "hexawebsystems/laravel-hexa-package-instagram",
-    "description": "Instagram account attach, authenticated browser scraping, and public import tools for Hexa apps.",
-    "type": "library",
-    "license": "proprietary",
-    "require": {
-        "php": "^8.2"
-    },
-    "autoload": {
-        "psr-4": {
-            "hexa_package_instagram\\": "src/"
-        }
-    },
-    "extra": {
-        "laravel": {
-            "providers": [
-                "hexa_package_instagram\\Providers\\InstagramServiceProvider"
-            ]
-        }
-    },
-    "minimum-stability": "dev",
-    "prefer-stable": true
+  "name": "hexawebsystems/laravel-hexa-package-instagram",
+  "description": "Instagram account attach, authenticated browser scraping, and public import tools for Hexa apps.",
+  "type": "library",
+  "license": "proprietary",
+  "require": {
+    "php": "^8.2",
+    "hexawebsystems/laravel-hexa-package-browser-worker": "*",
+    "hexawebsystems/laravel-hexa-package-browser-console": "*",
+    "hexawebsystems/laravel-hexa-package-proxy": "*"
+  },
+  "autoload": {
+    "psr-4": {
+      "hexa_package_instagram\\": "src/"
+    }
+  },
+  "extra": {
+    "laravel": {
+      "providers": [
+        "hexa_package_instagram\\Providers\\InstagramServiceProvider"
+      ]
+    }
+  },
+  "minimum-stability": "dev",
+  "prefer-stable": true
 }
