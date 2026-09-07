@@ -4,6 +4,7 @@ namespace Tests\Feature\Concerns;
 
 use hexa_core\Services\CredentialService;
 use hexa_package_browser_worker\Contracts\BrowserWorkerBridgeContract;
+use hexa_package_browser_worker\Domains\Bridge\BrowserWorkerBridge;
 use hexa_package_browser_worker\Services\BrowserHttpService;
 use hexa_package_instagram\Domains\Config\InstagramConfigRepository;
 use hexa_package_instagram\Services\InstagramAccountSessionService;
@@ -27,7 +28,8 @@ trait TestsInstagramProfileDiscovery
 
     public function test_following_scan_returns_followed_usernames_from_worker_result(): void
     {
-        $spy = new class implements BrowserWorkerBridgeContract {
+        $spy = new class extends BrowserWorkerBridge {
+            public function __construct() {}
             public ?array $lastOptions = null;
             public function health(): array { return ['success' => true]; }
             public function integrityTest(?string $profile = null): array { return ['success' => true]; }
@@ -76,7 +78,8 @@ trait TestsInstagramProfileDiscovery
 
     public function test_active_story_candidates_scan_returns_home_feed_usernames(): void
     {
-        app()->instance(BrowserWorkerBridgeContract::class, new class implements BrowserWorkerBridgeContract {
+        app()->instance(BrowserWorkerBridgeContract::class, new class extends BrowserWorkerBridge {
+            public function __construct() {}
             public function health(): array { return ['success' => true]; }
             public function integrityTest(?string $profile = null): array { return ['success' => true]; }
             public function status(?string $profile = null): array { return ['success' => true]; }

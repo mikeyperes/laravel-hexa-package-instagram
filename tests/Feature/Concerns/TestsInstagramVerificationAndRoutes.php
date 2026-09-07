@@ -4,6 +4,7 @@ namespace Tests\Feature\Concerns;
 
 use hexa_core\Services\CredentialService;
 use hexa_package_browser_worker\Contracts\BrowserWorkerBridgeContract;
+use hexa_package_browser_worker\Domains\Bridge\BrowserWorkerBridge;
 use hexa_package_browser_worker\Services\BrowserHttpService;
 use hexa_package_instagram\Domains\Config\InstagramConfigRepository;
 use hexa_package_instagram\Services\InstagramAccountSessionService;
@@ -21,7 +22,8 @@ trait TestsInstagramVerificationAndRoutes
         $repository = app(InstagramConfigRepository::class);
         $repository->saveAccount('JPN Main', 'jpn-miami', 'miamijpn', true);
 
-        app()->instance(BrowserWorkerBridgeContract::class, new class implements BrowserWorkerBridgeContract {
+        app()->instance(BrowserWorkerBridgeContract::class, new class extends BrowserWorkerBridge {
+            public function __construct() {}
             private int $runCalls = 0;
 
             public function health(): array
@@ -188,7 +190,8 @@ trait TestsInstagramVerificationAndRoutes
     {
         $this->withoutMiddleware();
 
-        app()->instance(BrowserWorkerBridgeContract::class, new class implements BrowserWorkerBridgeContract {
+        app()->instance(BrowserWorkerBridgeContract::class, new class extends BrowserWorkerBridge {
+            public function __construct() {}
             public function health(): array
             {
                 return ['success' => true, 'message' => 'ok', 'status_code' => 200];

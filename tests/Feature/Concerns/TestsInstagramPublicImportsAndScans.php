@@ -4,6 +4,7 @@ namespace Tests\Feature\Concerns;
 
 use hexa_core\Services\CredentialService;
 use hexa_package_browser_worker\Contracts\BrowserWorkerBridgeContract;
+use hexa_package_browser_worker\Domains\Bridge\BrowserWorkerBridge;
 use hexa_package_browser_worker\Services\BrowserHttpService;
 use hexa_package_instagram\Domains\Config\InstagramConfigRepository;
 use hexa_package_instagram\Services\InstagramAccountSessionService;
@@ -94,7 +95,8 @@ trait TestsInstagramPublicImportsAndScans
 
     public function test_profile_scan_fails_cleanly_when_worker_is_redirected_to_login(): void
     {
-        app()->instance(BrowserWorkerBridgeContract::class, new class implements BrowserWorkerBridgeContract {
+        app()->instance(BrowserWorkerBridgeContract::class, new class extends BrowserWorkerBridge {
+            public function __construct() {}
             public function health(): array
             {
                 return ['success' => true];
@@ -182,7 +184,8 @@ trait TestsInstagramPublicImportsAndScans
 
     public function test_story_scan_fails_cleanly_when_instagram_requires_whatsapp_code_verification(): void
     {
-        app()->instance(BrowserWorkerBridgeContract::class, new class implements BrowserWorkerBridgeContract {
+        app()->instance(BrowserWorkerBridgeContract::class, new class extends BrowserWorkerBridge {
+            public function __construct() {}
             public function health(): array
             {
                 return ['success' => true];

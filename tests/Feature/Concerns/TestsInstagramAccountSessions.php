@@ -4,6 +4,7 @@ namespace Tests\Feature\Concerns;
 
 use hexa_core\Services\CredentialService;
 use hexa_package_browser_worker\Contracts\BrowserWorkerBridgeContract;
+use hexa_package_browser_worker\Domains\Bridge\BrowserWorkerBridge;
 use hexa_package_browser_worker\Services\BrowserHttpService;
 use hexa_package_instagram\Domains\Config\InstagramConfigRepository;
 use hexa_package_instagram\Services\InstagramAccountSessionService;
@@ -36,7 +37,8 @@ trait TestsInstagramAccountSessions
         $repository->saveAccount('JPN Main', 'JPN.Main', 'jpnmiami', true);
         app(CredentialService::class)->store('instagram', 'account_password_jpn-main', 'secret-pass');
 
-        app()->instance(BrowserWorkerBridgeContract::class, new class implements BrowserWorkerBridgeContract {
+        app()->instance(BrowserWorkerBridgeContract::class, new class extends BrowserWorkerBridge {
+            public function __construct() {}
             public int $calls = 0;
 
             public function health(): array
@@ -132,7 +134,8 @@ trait TestsInstagramAccountSessions
         $repository = app(InstagramConfigRepository::class);
         $repository->saveAccount('JPN Main', 'JPN.Main', 'jpnmiami', true);
 
-        app()->instance(BrowserWorkerBridgeContract::class, new class implements BrowserWorkerBridgeContract {
+        app()->instance(BrowserWorkerBridgeContract::class, new class extends BrowserWorkerBridge {
+            public function __construct() {}
             public function health(): array
             {
                 return ['success' => true, 'message' => 'Browser worker is reachable.', 'status_code' => 200];
@@ -215,7 +218,8 @@ trait TestsInstagramAccountSessions
         $repository = app(InstagramConfigRepository::class);
         $repository->saveAccount('Ops Backup', 'ops.backup', 'qa_nonexistent_user_hexa', true);
 
-        app()->instance(BrowserWorkerBridgeContract::class, new class implements BrowserWorkerBridgeContract {
+        app()->instance(BrowserWorkerBridgeContract::class, new class extends BrowserWorkerBridge {
+            public function __construct() {}
             public function health(): array
             {
                 return ['success' => true, 'message' => 'Browser worker is reachable.', 'status_code' => 200];
@@ -307,7 +311,8 @@ trait TestsInstagramAccountSessions
         $repository = app(InstagramConfigRepository::class);
         $repository->saveAccount('JPN Main', 'jpn-miami', 'miamijpn', true);
 
-        app()->instance(BrowserWorkerBridgeContract::class, new class implements BrowserWorkerBridgeContract {
+        app()->instance(BrowserWorkerBridgeContract::class, new class extends BrowserWorkerBridge {
+            public function __construct() {}
             public function health(): array
             {
                 return ['success' => true, 'message' => 'Browser worker is reachable.', 'status_code' => 200];
@@ -412,7 +417,8 @@ trait TestsInstagramAccountSessions
         $repository = app(InstagramConfigRepository::class);
         $repository->saveAccount('JPN Main', 'jpn-miami', 'miamijpn', true);
 
-        app()->instance(BrowserWorkerBridgeContract::class, new class implements BrowserWorkerBridgeContract {
+        app()->instance(BrowserWorkerBridgeContract::class, new class extends BrowserWorkerBridge {
+            public function __construct() {}
             public function health(): array
             {
                 return ['success' => true, 'message' => 'Browser worker is reachable.', 'status_code' => 200];
