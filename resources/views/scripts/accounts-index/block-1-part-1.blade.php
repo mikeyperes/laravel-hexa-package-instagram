@@ -347,7 +347,7 @@ function instagramAccountsPage() {
         recoverySummary(profile) {
             const state = this.stateFor(profile);
             if (!this.proofLoaded(profile)) return "Click Check status. The system has not inspected this server worker profile yet.";
-            if (state.connected) return "This server worker profile is authenticated. JPN scanner jobs can use it.";
+            if (state.connected) return "This server worker profile is authenticated. Instagram scans can use it.";
             if (state.captcha_required) return "The server worker is blocked by Meta reCAPTCHA. Solving it in a normal local browser does not update the worker profile. Complete it in the server worker session, then click Check status.";
             if (state.verification_required) return "Do not switch browsers. Enter the code below so this exact worker profile can finish login.";
             if (state.challenge) return "Instagram is blocking the server worker. A normal local Instagram tab is not proof. Finish the challenge inside the server worker session, then click Check status again.";
@@ -360,7 +360,7 @@ function instagramAccountsPage() {
         recoveryNextAction(profile) {
             const state = this.stateFor(profile);
             if (!this.proofLoaded(profile)) return "Click Check status.";
-            if (state.connected) return "Done. Return to JPN settings or run the scanner.";
+            if (state.connected) return "Done. Return to the requesting workflow or run a scan.";
             if (state.captcha_required) return "Complete the Meta reCAPTCHA inside the server worker session, not a normal local Instagram tab, then click Check status.";
             if (state.verification_required) return "Enter the Instagram verification code below, then click Submit verification code.";
             if (state.challenge) return "Finish the Instagram challenge inside the server worker session, then click Check status.";
@@ -400,7 +400,7 @@ function instagramAccountsPage() {
                     number: "3",
                     label: "Scanner ready",
                     status: connected ? "success" : "pending",
-                    detail: connected ? "JPN scanner jobs can use this account." : "Pending until Check status returns Pass."
+                    detail: connected ? "Instagram scans can use this account." : "Pending until Check status returns Pass."
                 }
             ];
         },

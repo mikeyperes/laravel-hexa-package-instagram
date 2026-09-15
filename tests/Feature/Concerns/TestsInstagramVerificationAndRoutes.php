@@ -17,6 +17,43 @@ use Tests\TestCase;
 trait TestsInstagramVerificationAndRoutes
 {
 
+    public function test_accounts_view_renders_generic_navigation_without_a_jpn_route(): void
+    {
+        $routes = app('router')->getRoutes();
+        $jpnRoute = $routes->getByName('jpn-miami.settings');
+        $originalAction = $jpnRoute?->getAction();
+
+        if ($jpnRoute !== null) {
+            $hiddenAction = $originalAction;
+            $hiddenAction['as'] = 'test-hidden-jpn-settings';
+            $jpnRoute->setAction($hiddenAction);
+            $routes->refreshNameLookups();
+        }
+
+        try {
+            $this->assertFalse(app('router')->has('jpn-miami.settings'));
+
+            $rendered = view('instagram::accounts.index', [
+                'settings' => ['session_profile' => 'instagram-main', 'accounts' => []],
+                'status' => ['accounts' => [], 'active_profile' => 'instagram-main', 'active_account' => null],
+                'browserConsole' => ['data' => ['url' => 'https://console.example.test/', 'web_online' => true, 'vnc_online' => true]],
+                'runtimeReports' => [],
+            ])->render();
+        } finally {
+            if ($jpnRoute !== null && $originalAction !== null) {
+                $jpnRoute->setAction($originalAction);
+                $routes->refreshNameLookups();
+            }
+        }
+
+        $this->assertStringContainsString('href="'.route('settings.instagram').'"', $rendered);
+        $this->assertStringContainsString('Instagram settings', $rendered);
+        $this->assertStringNotContainsString('JPN settings', $rendered);
+
+        $viewSource = (string) file_get_contents(dirname(__DIR__, 3).'/resources/views/accounts/index.blade.php');
+        $this->assertStringNotContainsString('jpn-miami.settings', $viewSource);
+    }
+
     public function test_submit_verification_code_advances_attached_browser_session(): void
     {
         $repository = app(InstagramConfigRepository::class);

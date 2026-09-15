@@ -145,7 +145,7 @@
             <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_7rem_auto]">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Instagram username</label>
-                    <input type="text" x-model="profileForm.instagram_username" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="jpnmiami">
+                    <input type="text" x-model="profileForm.instagram_username" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="exampleaccount">
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Limit</label>
@@ -183,7 +183,7 @@
             <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Instagram username</label>
-                    <input type="text" x-model="storyForm.instagram_username" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="jpnmiami">
+                    <input type="text" x-model="storyForm.instagram_username" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="exampleaccount">
                 </div>
                 <div class="flex items-end">
                     <button type="button" @click="runStoryScan()" :disabled="loading.storyScan" class="inline-flex items-center justify-center px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 disabled:opacity-50 w-full">

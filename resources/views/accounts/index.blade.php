@@ -53,9 +53,7 @@
             </div>
             <div class="flex items-center gap-2 flex-wrap">
                 <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide {{ $consoleBadgeClass }}">{{ $consoleBadgeLabel }}</span>
-                @if(Route::has("jpn-miami.settings"))
-                <a href="{{ route("jpn-miami.settings") }}" target="_blank" rel="noopener" class="ig-btn ig-btn-secondary">JPN settings &#8599;</a>
-                @endif
+                <a href="{{ route("settings.instagram") }}" class="ig-btn ig-btn-secondary">Instagram settings</a>
             </div>
         </div>
     </div>
@@ -94,15 +92,15 @@
         <form @submit.prevent="addAccount()" class="ig-grid mt-4">
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Account label</label>
-                <input type="text" x-model="newAccount.label" @input="syncProfileFromLabel()" class="w-full border border-gray-300 px-3 py-2 text-sm" placeholder="JPN Miami">
+                <input type="text" x-model="newAccount.label" @input="syncProfileFromLabel()" class="w-full border border-gray-300 px-3 py-2 text-sm" placeholder="Community account">
             </div>
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Browser profile</label>
-                <input type="text" x-model="newAccount.profile" @input="profileTouched = true" class="w-full border border-gray-300 px-3 py-2 text-sm ig-mono" placeholder="jpn-miami">
+                <input type="text" x-model="newAccount.profile" @input="profileTouched = true" class="w-full border border-gray-300 px-3 py-2 text-sm ig-mono" placeholder="community-account">
             </div>
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Instagram username</label>
-                <input type="text" x-model="newAccount.instagram_username" class="w-full border border-gray-300 px-3 py-2 text-sm" placeholder="miamijpn">
+                <input type="text" x-model="newAccount.instagram_username" class="w-full border border-gray-300 px-3 py-2 text-sm" placeholder="exampleaccount">
             </div>
             <div class="flex items-end">
                 <label class="inline-flex items-center gap-2 text-sm text-gray-700">

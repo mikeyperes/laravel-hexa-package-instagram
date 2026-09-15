@@ -296,11 +296,11 @@
         <form @submit.prevent="save()" class="px-6 py-5 grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
                 <label class="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">Default profile username</label>
-                <input type="text" x-model="form.default_profile_username" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400" placeholder="jpnmiami">
+                <input type="text" x-model="form.default_profile_username" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400" placeholder="exampleaccount">
             </div>
             <div>
                 <label class="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">Default story username</label>
-                <input type="text" x-model="form.default_story_username" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400" placeholder="jpnmiami">
+                <input type="text" x-model="form.default_story_username" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400" placeholder="exampleaccount">
             </div>
             <div>
                 <label class="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">Default post URL</label>
