@@ -2,363 +2,144 @@
 
 namespace Tests\Feature\Concerns;
 
-use hexa_core\Services\CredentialService;
 use hexa_package_browser_worker\Contracts\BrowserWorkerBridgeContract;
 use hexa_package_browser_worker\Domains\Bridge\BrowserWorkerBridge;
 use hexa_package_browser_worker\Services\BrowserHttpService;
-use hexa_package_instagram\Domains\Config\InstagramConfigRepository;
 use hexa_package_instagram\Services\InstagramAccountSessionService;
-use hexa_package_instagram\Services\InstagramImportService;
-use hexa_package_instagram\Services\InstagramScraperService;
-use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\Schema;
-use Tests\TestCase;
+use hexa_package_instagram\Services\InstagramConnectionService;
 
 trait TestsInstagramVerificationAndRoutes
 {
-
-    public function test_accounts_view_renders_generic_navigation_without_a_jpn_route(): void
+    public function test_accounts_view_uses_browser_console_for_login_and_routing(): void
     {
-        $routes = app('router')->getRoutes();
-        $jpnRoute = $routes->getByName('jpn-miami.settings');
-        $originalAction = $jpnRoute?->getAction();
+        $rendered = view('instagram::accounts.index', [
+            'settings' => ['session_profile' => 'instagram-main', 'accounts' => []],
+            'status' => ['accounts' => [], 'active_profile' => 'instagram-main', 'active_account' => null],
+        ])->render();
 
-        if ($jpnRoute !== null) {
-            $hiddenAction = $originalAction;
-            $hiddenAction['as'] = 'test-hidden-jpn-settings';
-            $jpnRoute->setAction($hiddenAction);
-            $routes->refreshNameLookups();
-        }
-
-        try {
-            $this->assertFalse(app('router')->has('jpn-miami.settings'));
-
-            $rendered = view('instagram::accounts.index', [
-                'settings' => ['session_profile' => 'instagram-main', 'accounts' => []],
-                'status' => ['accounts' => [], 'active_profile' => 'instagram-main', 'active_account' => null],
-                'browserConsole' => ['data' => ['url' => 'https://console.example.test/', 'web_online' => true, 'vnc_online' => true]],
-                'runtimeReports' => [],
-            ])->render();
-        } finally {
-            if ($jpnRoute !== null && $originalAction !== null) {
-                $jpnRoute->setAction($originalAction);
-                $routes->refreshNameLookups();
-            }
-        }
-
-        $this->assertStringContainsString('href="'.route('settings.instagram').'"', $rendered);
-        $this->assertStringContainsString('Instagram settings', $rendered);
-        $this->assertStringNotContainsString('JPN settings', $rendered);
-
-        $viewSource = (string) file_get_contents(dirname(__DIR__, 3).'/resources/views/accounts/index.blade.php');
-        $this->assertStringNotContainsString('jpn-miami.settings', $viewSource);
+        $this->assertStringContainsString('Browser Console owns Instagram login and network routing', $rendered);
+        $this->assertStringNotContainsString('saved password', strtolower($rendered));
+        $this->assertStringNotContainsString('jpn-miami.settings', $rendered);
     }
 
-    public function test_submit_verification_code_advances_attached_browser_session(): void
+    public function test_overview_uses_the_single_connection_status_and_browser_console_handoff(): void
     {
-        $repository = app(InstagramConfigRepository::class);
-        $repository->saveAccount('JPN Main', 'jpn-miami', 'miamijpn', true);
+        $rendered = view('instagram::workspace.index', [
+            'status' => [
+                'active_profile' => 'jpn-miami',
+                'active_account' => [
+                    'label' => 'Instagram - jpnmiami',
+                    'instagram_username' => 'miamijpn',
+                    'console_url' => 'https://code.example.test/browser-console/sessions?profile=jpn-miami',
+                ],
+                'has_meta_token' => false,
+            ],
+        ])->render();
 
-        app()->instance(BrowserWorkerBridgeContract::class, new class extends BrowserWorkerBridge {
-            public function __construct() {}
-            private int $runCalls = 0;
-
-            public function health(): array
-            {
-                return ['success' => true];
-            }
-
-            public function integrityTest(?string $profile = null): array
-            {
-                return ['success' => true];
-            }
-
-            public function status(?string $profile = null): array
-            {
-                return [
-                    'success' => true,
-                    'data' => [
-                        'current_url' => 'https://www.instagram.com/auth_platform/codeentry/',
-                    ],
-                ];
-            }
-
-            public function logs(int $limit = 100): array
-            {
-                return ['success' => true];
-            }
-
-            public function launchProfile(?string $profile = null): array
-            {
-                return ['success' => true];
-            }
-
-            public function closeProfile(?string $profile = null): array
-            {
-                return ['success' => true];
-            }
-
-            public function logoutProfile(?string $profile = null): array
-            {
-                return ['success' => true];
-            }
-
-            public function deleteProfile(?string $profile = null): array
-            {
-                return ['success' => true];
-            }
-
-            public function pageHtml(?string $profile, string $url, array $options = []): array
-            {
-                return ['success' => true];
-            }
-
-            public function pageText(?string $profile, string $url, array $options = []): array
-            {
-                return ['success' => true];
-            }
-
-            public function pageScreenshot(?string $profile, string $url, array $options = []): array
-            {
-                return ['success' => true];
-            }
-
-            public function runAutomation(?string $profile, array $steps, array $options = []): array
-            {
-                $this->runCalls++;
-
-                if ($this->runCalls === 1) {
-                    return [
-                        'success' => true,
-                        'message' => 'Automation flow completed.',
-                        'status_code' => 200,
-                        'data' => [
-                            'results' => [
-                                ['label' => 'detect_login_state', 'result' => [
-                                    'connected' => false,
-                                    'login_form' => false,
-                                    'verification_required' => true,
-                                    'verification_channel' => 'email',
-                                    'challenge' => true,
-                                    'login_copy_detected' => false,
-                                    'strong_nav_count' => 0,
-                                    'alerts' => [],
-                                    'body_excerpt' => 'Check your email Enter the code we sent to your email.',
-                                ]],
-                            ],
-                            'final' => [
-                                'final_url' => 'https://www.instagram.com/auth_platform/codeentry/',
-                            ],
-                        ],
-                    ];
-                }
-
-                return [
-                    'success' => true,
-                    'message' => 'Automation flow completed.',
-                    'status_code' => 200,
-                    'data' => [
-                        'results' => [
-                            ['label' => 'detect_login_state', 'result' => [
-                                'connected' => true,
-                                'login_form' => false,
-                                'verification_required' => false,
-                                'verification_channel' => '',
-                                'challenge' => false,
-                                'login_copy_detected' => false,
-                                'strong_nav_count' => 3,
-                                'alerts' => [],
-                                'body_excerpt' => 'Instagram home',
-                            ]],
-                        ],
-                        'final' => [
-                            'final_url' => 'https://www.instagram.com/',
-                        ],
-                    ],
-                ];
-            }
-        });
-
-        $result = app(InstagramAccountSessionService::class)->submitVerificationCode('jpn-miami', '916724');
-
-        $this->assertTrue($result['success']);
-        $this->assertTrue($result['data']['connected']);
-        $this->assertSame('Instagram verification code submitted.', $result['message']);
+        $this->assertStringContainsString('Browser Console owns the browser session', $rendered);
+        $this->assertStringContainsString('instagram\\/status', $rendered);
+        $this->assertStringNotContainsString('saved password', strtolower($rendered));
+        $this->assertStringNotContainsString('instagram/integrity', $rendered);
     }
 
-    public function test_account_routes_save_and_activate_multiple_profiles(): void
+    public function test_obsolete_login_and_remote_screen_routes_are_absent(): void
+    {
+        $router = app('router');
+
+        foreach ([
+            'instagram.accounts.login',
+            'instagram.accounts.verification',
+            'instagram.accounts.logout',
+            'instagram.accounts.screen',
+            'instagram.accounts.click',
+            'instagram.accounts.reload',
+            'instagram.integrity',
+        ] as $name) {
+            $this->assertFalse($router->has($name), $name.' should be removed.');
+        }
+    }
+
+    public function test_account_routes_save_activate_and_remove_bindings(): void
     {
         $this->withoutMiddleware();
 
-        $saveMain = $this->postJson('/instagram/accounts', [
+        $this->postJson('/instagram/accounts', [
             'label' => 'JPN Main',
             'profile' => 'JPN.Main',
             'instagram_username' => 'jpnmiami',
-            'password' => 'secret-pass',
             'set_active' => true,
-        ]);
+        ])->assertOk()->assertJsonPath('settings.session_profile', 'jpn-main');
 
-        $saveMain->assertOk()
-            ->assertJsonPath('success', true)
-            ->assertJsonPath('settings.session_profile', 'jpn-main');
-
-        $saveBackup = $this->postJson('/instagram/accounts', [
+        $this->postJson('/instagram/accounts', [
             'label' => 'Ops Backup',
             'profile' => 'ops.backup',
             'instagram_username' => 'opsbackup',
-            'set_active' => false,
-        ]);
+        ])->assertOk();
 
-        $saveBackup->assertOk()
-            ->assertJsonPath('success', true);
+        $this->postJson('/instagram/accounts/activate', ['profile' => 'ops.backup'])
+            ->assertOk()
+            ->assertJsonPath('status.active_profile', 'ops-backup');
 
-        $activate = $this->postJson('/instagram/accounts/activate', [
-            'profile' => 'ops.backup',
-        ]);
-
-        $activate->assertOk()
-            ->assertJsonPath('success', true)
-            ->assertJsonPath('settings.session_profile', 'ops-backup')
-            ->assertJsonPath('status.active_profile', 'ops-backup')
-            ->assertJsonPath('status.active_account.instagram_username', 'opsbackup');
+        $this->deleteJson('/instagram/accounts', ['profile' => 'jpn-main'])
+            ->assertOk()
+            ->assertJsonPath('message', 'Instagram account binding removed. The Browser Console profile was preserved.');
     }
 
     public function test_raw_workspace_actions_are_saved_into_history(): void
     {
         $this->withoutMiddleware();
+        $state = $this->readyWorkerState('jpn-miami', 'direct');
+        $this->bindInstagramWorker($state);
 
-        app()->instance(BrowserWorkerBridgeContract::class, new class extends BrowserWorkerBridge {
-            public function __construct() {}
-            public function health(): array
-            {
-                return ['success' => true, 'message' => 'ok', 'status_code' => 200];
-            }
+        app()->instance(BrowserWorkerBridgeContract::class, new class($state) extends BrowserWorkerBridge
+        {
+            public function __construct(private readonly array $state) {}
 
-            public function integrityTest(?string $profile = null): array
+            public function readyProfile(string $profile, bool $checkAuthentication = true, ?string $expectedAccountIdentifier = null): array
             {
-                return ['success' => true, 'message' => 'ok'];
+                return ['success' => true, 'message' => 'ready', 'data' => $this->state];
             }
 
             public function status(?string $profile = null): array
             {
-                return ['success' => true, 'message' => 'ok'];
-            }
-
-            public function logs(int $limit = 100): array
-            {
-                return ['success' => true, 'data' => []];
-            }
-
-            public function launchProfile(?string $profile = null): array
-            {
-                return ['success' => true];
-            }
-
-            public function closeProfile(?string $profile = null): array
-            {
-                return ['success' => true];
-            }
-
-            public function logoutProfile(?string $profile = null): array
-            {
-                return ['success' => true];
-            }
-
-            public function deleteProfile(?string $profile = null): array
-            {
-                return ['success' => true];
-            }
-
-            public function pageHtml(?string $profile, string $url, array $options = []): array
-            {
-                return ['success' => true];
-            }
-
-            public function pageText(?string $profile, string $url, array $options = []): array
-            {
-                return ['success' => true];
-            }
-
-            public function pageScreenshot(?string $profile, string $url, array $options = []): array
-            {
-                return ['success' => true];
+                return ['success' => true, 'message' => 'ready', 'data' => $this->state];
             }
 
             public function runAutomation(?string $profile, array $steps, array $options = []): array
             {
-                $labels = array_column($steps, 'label');
-
-                if (in_array('extract_profile', $labels, true)) {
-                    return [
-                        'success' => true,
-                        'message' => 'Automation flow completed.',
-                        'status_code' => 200,
-                        'data' => [
-                            'results' => [
-                                ['label' => 'extract_profile', 'result' => [
-                                    'url' => 'https://www.instagram.com/jpnmiami/',
-                                    'title' => 'JPN Miami',
-                                    'heading' => 'JPN Miami',
-                                    'body_excerpt' => 'Profile excerpt',
-                                    'post_links' => ['https://www.instagram.com/p/ABC123/'],
-                                    'media' => [],
-                                ]],
-                            ],
-                            'final' => ['final_url' => 'https://www.instagram.com/jpnmiami/'],
-                        ],
-                    ];
-                }
-
                 return [
                     'success' => true,
                     'message' => 'Automation flow completed.',
                     'status_code' => 200,
                     'data' => [
-                        'results' => [
-                            ['label' => 'detect_login_state', 'result' => [
-                                'connected' => true,
-                                'login_form' => false,
-                                'verification_required' => false,
-                                'verification_channel' => '',
-                                'challenge' => false,
-                                'login_copy_detected' => false,
-                                'strong_nav_count' => 4,
-                                'alerts' => [],
-                                'body_excerpt' => 'Instagram connected',
-                                'url' => 'https://www.instagram.com/',
-                            ]],
-                        ],
-                        'final' => ['final_url' => 'https://www.instagram.com/'],
+                        'results' => [[
+                            'label' => 'extract_profile',
+                            'result' => [
+                                'url' => 'https://www.instagram.com/jpnmiami/',
+                                'title' => 'JPN Miami',
+                                'heading' => 'JPN Miami',
+                                'body_excerpt' => 'Profile excerpt',
+                                'post_links' => ['https://www.instagram.com/p/ABC123/'],
+                                'media' => [],
+                            ],
+                        ]],
+                        'final' => ['final_url' => 'https://www.instagram.com/jpnmiami/'],
                     ],
                 ];
             }
         });
+        app()->forgetInstance(InstagramConnectionService::class);
+        app()->forgetInstance(InstagramAccountSessionService::class);
 
-        app()->instance(BrowserHttpService::class, new class extends BrowserHttpService {
+        app()->instance(BrowserHttpService::class, new class extends BrowserHttpService
+        {
             public function getHtml(string $url, array $options = []): array
             {
-                if (str_contains($url, '/embed/captioned/')) {
-                    return [
-                        'success' => true,
-                        'status_code' => 200,
-                        'body' => '<html><body><img class="EmbeddedMediaImage" srcset="https://cdn.example.com/post-small.jpg 320w, https://cdn.example.com/post-full.jpg 1080w" src="https://cdn.example.com/post-small.jpg"></body></html>',
-                        'headers' => ['Content-Type' => ['text/html']],
-                        'final_url' => $url,
-                        'error' => null,
-                    ];
-                }
+                $body = str_contains($url, '/embed/captioned/')
+                    ? '<html><body><img class="EmbeddedMediaImage" src="https://cdn.example.com/post-full.jpg"></body></html>'
+                    : '<html><head><meta property="og:title" content="Post by JPN Miami"><meta property="og:description" content="Caption proof text"><meta property="og:image" content="https://cdn.example.com/post-full.jpg"></head></html>';
 
-                return [
-                    'success' => true,
-                    'status_code' => 200,
-                    'body' => '<html><head>'
-                        . '<meta property="og:title" content="Post by JPN Miami">'
-                        . '<meta property="og:description" content="Caption proof text">'
-                        . '</head><body></body></html>',
-                    'headers' => ['Content-Type' => ['text/html']],
-                    'final_url' => $url,
-                    'error' => null,
-                ];
+                return ['success' => true, 'status_code' => 200, 'body' => $body, 'headers' => [], 'final_url' => $url, 'error' => null];
             }
         });
 
@@ -369,41 +150,16 @@ trait TestsInstagramVerificationAndRoutes
             'set_active' => true,
         ])->assertOk();
 
-        $this->getJson('/instagram/status?profile=jpn-miami')
+        $this->getJson('/instagram/status?profile=jpn-miami')->assertOk()->assertJsonPath('data.connected', true);
+        $this->postJson('/instagram/profile-scan', ['profile' => 'jpn-miami', 'instagram_username' => 'jpnmiami', 'limit' => 6])
             ->assertOk()
-            ->assertJsonPath('data.connected', true);
-
-        $this->postJson('/instagram/profile-scan', [
-            'profile' => 'jpn-miami',
-            'instagram_username' => 'jpnmiami',
-            'limit' => 6,
-        ])->assertOk()
             ->assertJsonPath('data.scan.post_links.0', 'https://www.instagram.com/p/ABC123/');
-
-        $this->postJson('/instagram/import-post', [
-            'url' => 'https://www.instagram.com/p/ABC123/',
-            'include_image_data' => false,
-        ])->assertOk()
+        $this->postJson('/instagram/import-post', ['url' => 'https://www.instagram.com/p/ABC123/', 'include_image_data' => false])
+            ->assertOk()
             ->assertJsonPath('data.title', 'Post by JPN Miami');
 
-        $this->assertDatabaseHas('activity_logs', [
-            'category' => 'instagram',
-            'action' => 'raw_status',
-        ]);
-
-        $this->assertDatabaseHas('activity_logs', [
-            'category' => 'instagram',
-            'action' => 'raw_profile_scan',
-        ]);
-
-        $this->assertDatabaseHas('activity_logs', [
-            'category' => 'instagram',
-            'action' => 'raw_post_import',
-        ]);
-
-        $this->get('/instagram/raw')
-            ->assertOk()
-            ->assertSee('Raw action history')
-            ->assertSee('Instagram Raw History');
+        foreach (['raw_status', 'raw_profile_scan', 'raw_post_import'] as $action) {
+            $this->assertDatabaseHas('activity_logs', ['category' => 'instagram', 'action' => $action]);
+        }
     }
 }

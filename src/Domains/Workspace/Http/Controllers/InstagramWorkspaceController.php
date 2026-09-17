@@ -32,17 +32,6 @@ class InstagramWorkspaceController extends Controller
         ]);
     }
 
-    public function integrity(Request $request, InstagramConfigRepository $config, InstagramAccountSessionService $sessions): JsonResponse
-    {
-        $profile = $config->resolveProfile($request->input('profile') ?: $request->query('profile'));
-        $result = $sessions->integrityTest($profile);
-        $this->recordRawAction('raw_integrity', $result, [
-            'profile' => $profile,
-        ]);
-
-        return response()->json($result);
-    }
-
     public function status(Request $request, InstagramConfigRepository $config, InstagramAccountSessionService $sessions): JsonResponse
     {
         $profile = $config->resolveProfile($request->input('profile') ?: $request->query('profile'));
@@ -149,7 +138,7 @@ class InstagramWorkspaceController extends Controller
         $hasMetaToken = $credentials->exists('instagram', 'meta_access_token');
         $metaTokenMasked = $credentials->getMasked('instagram', 'meta_access_token');
 
-        if (!$hasMetaToken && $credentials->exists('content_extractor', 'instagram_access_token')) {
+        if (! $hasMetaToken && $credentials->exists('content_extractor', 'instagram_access_token')) {
             $credentialKey = 'cred_content_extractor_instagram_access_token';
             $credentialRow = Setting::query()->where('key', $credentialKey)->first();
             $hasMetaToken = true;
@@ -178,7 +167,7 @@ class InstagramWorkspaceController extends Controller
     {
         return ActivityLog::query()
             ->where('category', 'instagram')
-            ->whereIn('action', ['raw_status', 'raw_integrity', 'raw_profile_scan', 'raw_story_scan', 'raw_post_scan', 'raw_post_import'])
+            ->whereIn('action', ['raw_status', 'raw_profile_scan', 'raw_story_scan', 'raw_post_scan', 'raw_post_import'])
             ->latest('id')
             ->limit(30)
             ->get()
@@ -202,7 +191,7 @@ class InstagramWorkspaceController extends Controller
         }
 
         return match ($log->action) {
-            'raw_status', 'raw_integrity' => 'info',
+            'raw_status' => 'info',
             default => 'warning',
         };
     }
@@ -222,12 +211,11 @@ class InstagramWorkspaceController extends Controller
     private function actionDescription(string $action, array $payload): string
     {
         return match ($action) {
-            'raw_status' => 'Checked raw Instagram status for profile: ' . ($payload['profile'] ?? 'unknown'),
-            'raw_integrity' => 'Ran raw Instagram integrity test for profile: ' . ($payload['profile'] ?? 'unknown'),
-            'raw_profile_scan' => 'Ran raw Instagram profile scan for @' . ($payload['instagram_username'] ?? 'unknown'),
-            'raw_story_scan' => 'Ran raw Instagram story pull for @' . ($payload['instagram_username'] ?? 'unknown'),
-            'raw_post_scan' => 'Ran raw Instagram post scan for ' . Str::limit((string) ($payload['url'] ?? ''), 90),
-            'raw_post_import' => 'Ran raw Instagram post import for ' . Str::limit((string) ($payload['url'] ?? ''), 90),
+            'raw_status' => 'Checked raw Instagram status for profile: '.($payload['profile'] ?? 'unknown'),
+            'raw_profile_scan' => 'Ran raw Instagram profile scan for @'.($payload['instagram_username'] ?? 'unknown'),
+            'raw_story_scan' => 'Ran raw Instagram story pull for @'.($payload['instagram_username'] ?? 'unknown'),
+            'raw_post_scan' => 'Ran raw Instagram post scan for '.Str::limit((string) ($payload['url'] ?? ''), 90),
+            'raw_post_import' => 'Ran raw Instagram post import for '.Str::limit((string) ($payload['url'] ?? ''), 90),
             default => 'Ran Instagram raw action.',
         };
     }
@@ -257,9 +245,10 @@ class InstagramWorkspaceController extends Controller
             ],
             default => [
                 'connected' => data_get($result, 'data.connected'),
-                'verification_required' => data_get($result, 'data.verification_required'),
-                'challenge' => data_get($result, 'data.challenge'),
-                'current_url' => data_get($result, 'data.probe.url'),
+                'transport' => data_get($result, 'data.transport'),
+                'authenticated' => data_get($result, 'data.authenticated'),
+                'account_verified' => data_get($result, 'data.account_verified'),
+                'current_url' => data_get($result, 'data.current_url'),
             ],
         };
     }

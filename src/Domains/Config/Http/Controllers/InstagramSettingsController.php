@@ -23,7 +23,7 @@ class InstagramSettingsController extends Controller
         $hasMetaToken = $credentials->exists('instagram', 'meta_access_token');
         $metaTokenMasked = $credentials->getMasked('instagram', 'meta_access_token');
 
-        if (!$hasMetaToken && $credentials->exists('content_extractor', 'instagram_access_token')) {
+        if (! $hasMetaToken && $credentials->exists('content_extractor', 'instagram_access_token')) {
             $credentialKey = 'cred_content_extractor_instagram_access_token';
             $credentialRow = Setting::query()->where('key', $credentialKey)->first();
             $hasMetaToken = true;
@@ -77,7 +77,7 @@ class InstagramSettingsController extends Controller
         $account = $config->findAccount($profile);
         $accountUsername = $config->normalizeUsername((string) ($account['instagram_username'] ?? ''));
 
-        if (!$account || $accountUsername === '') {
+        if (! $account || $accountUsername === '') {
             $result = [
                 'success' => false,
                 'message' => 'Selected saved Instagram account is incomplete.',
@@ -89,7 +89,7 @@ class InstagramSettingsController extends Controller
                 ],
             ];
 
-            ActivityLog::log('instagram', 'connection_test', 'Ran Instagram connection test for profile: ' . $profile, [
+            ActivityLog::log('instagram', 'connection_test', 'Ran Instagram connection test for profile: '.$profile, [
                 'profile' => $profile,
                 'success' => false,
                 'message' => $result['message'],
@@ -99,15 +99,15 @@ class InstagramSettingsController extends Controller
             return response()->json($result);
         }
 
-        $integrity = $sessions->integrityTest($profile);
-        $data = is_array($integrity['data'] ?? null) ? $integrity['data'] : [];
+        $connection = $sessions->status($profile);
+        $data = is_array($connection['data'] ?? null) ? $connection['data'] : [];
         $data['selected_account'] = $sessions->accountPresentation($account);
 
-        if (!(bool) ($integrity['success'] ?? false)) {
-            $result = $integrity;
+        if (! (bool) ($connection['success'] ?? false)) {
+            $result = $connection;
             $result['data'] = $data;
 
-            ActivityLog::log('instagram', 'connection_test', 'Ran Instagram connection test for profile: ' . $profile, [
+            ActivityLog::log('instagram', 'connection_test', 'Ran Instagram connection test for profile: '.$profile, [
                 'profile' => $profile,
                 'success' => false,
                 'message' => $result['message'] ?? null,
@@ -131,7 +131,7 @@ class InstagramSettingsController extends Controller
         ];
 
         $storyCandidates = $scraper->activeStoryCandidatesScan($profile, $accountUsername, 24);
-        $storyCandidateRows = array_values(array_filter((array) data_get($storyCandidates, 'data.scan.usernames', []), static fn ($row): bool => is_array($row) && !empty($row['username'])));
+        $storyCandidateRows = array_values(array_filter((array) data_get($storyCandidates, 'data.scan.usernames', []), static fn ($row): bool => is_array($row) && ! empty($row['username'])));
         $storyCandidateUsernames = $this->normalizeUsernames(array_map(static fn (array $row): string => (string) ($row['username'] ?? ''), $storyCandidateRows), $accountUsername);
         $data['active_story_candidates'] = [
             'success' => (bool) ($storyCandidates['success'] ?? false),
@@ -165,11 +165,11 @@ class InstagramSettingsController extends Controller
             'success' => $success,
             'message' => $message,
             'detail' => $detail,
-            'status_code' => (int) ($integrity['status_code'] ?? 200),
+            'status_code' => (int) ($connection['status_code'] ?? 200),
             'data' => $data,
         ];
 
-        ActivityLog::log('instagram', 'connection_test', 'Ran Instagram connection test for profile: ' . $profile, [
+        ActivityLog::log('instagram', 'connection_test', 'Ran Instagram connection test for profile: '.$profile, [
             'profile' => $profile,
             'success' => $success,
             'message' => $message,
@@ -200,7 +200,7 @@ class InstagramSettingsController extends Controller
             $lastProfileScan = $profileScan;
             $postLinks = $this->sanitizeUrls((array) data_get($profileScan, 'data.scan.post_links', []));
 
-            if (!(bool) ($profileScan['success'] ?? false) || count($postLinks) === 0) {
+            if (! (bool) ($profileScan['success'] ?? false) || count($postLinks) === 0) {
                 continue;
             }
 
@@ -250,7 +250,7 @@ class InstagramSettingsController extends Controller
             $imageUrls = $this->sanitizeUrls((array) data_get($storyScan, 'data.scan.image_urls', []));
             $videoUrls = $this->sanitizeUrls((array) data_get($storyScan, 'data.scan.video_urls', []));
 
-            if (!(bool) ($storyScan['success'] ?? false) || (count($imageUrls) + count($videoUrls)) === 0) {
+            if (! (bool) ($storyScan['success'] ?? false) || (count($imageUrls) + count($videoUrls)) === 0) {
                 continue;
             }
 
@@ -305,7 +305,7 @@ class InstagramSettingsController extends Controller
                 continue;
             }
 
-            if (!preg_match('/^[A-Za-z0-9._]+$/', $username)) {
+            if (! preg_match('/^[A-Za-z0-9._]+$/', $username)) {
                 continue;
             }
 
@@ -326,7 +326,7 @@ class InstagramSettingsController extends Controller
 
         foreach ($urls as $url) {
             $value = trim((string) $url);
-            if ($value === '' || !filter_var($value, FILTER_VALIDATE_URL)) {
+            if ($value === '' || ! filter_var($value, FILTER_VALIDATE_URL)) {
                 continue;
             }
             $clean[] = $value;
@@ -337,15 +337,15 @@ class InstagramSettingsController extends Controller
 
     private function composeFailureDetail(array $following, array $postSample, array $storySample): string
     {
-        if (!(bool) ($following['success'] ?? false)) {
+        if (! (bool) ($following['success'] ?? false)) {
             return (string) ($following['detail'] ?? 'The following-list scan failed.');
         }
 
-        if (!(bool) ($postSample['success'] ?? false)) {
+        if (! (bool) ($postSample['success'] ?? false)) {
             return (string) ($postSample['detail'] ?? 'The random followed post sample failed.');
         }
 
-        if (!(bool) ($storySample['success'] ?? false)) {
+        if (! (bool) ($storySample['success'] ?? false)) {
             return (string) ($storySample['detail'] ?? 'The random followed story sample failed.');
         }
 

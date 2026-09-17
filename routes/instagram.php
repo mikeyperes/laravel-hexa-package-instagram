@@ -15,17 +15,10 @@ Route::middleware(['web', 'auth', 'locked', 'system_lock', 'two_factor', 'role']
     Route::get('/instagram/accounts', [InstagramAccountsController::class, 'index'])->name('instagram.accounts');
     Route::post('/instagram/accounts', [InstagramAccountsController::class, 'store'])->name('instagram.accounts.store');
     Route::post('/instagram/accounts/activate', [InstagramAccountsController::class, 'activate'])->name('instagram.accounts.activate');
-    Route::post('/instagram/accounts/login', [InstagramAccountsController::class, 'login'])->name('instagram.accounts.login');
     Route::get('/instagram/accounts/status', [InstagramAccountsController::class, 'status'])->name('instagram.accounts.status');
-    Route::post('/instagram/accounts/submit-code', [InstagramAccountsController::class, 'submitVerificationCode'])->name('instagram.accounts.submit-code');
-    Route::post('/instagram/accounts/worker-screen', [InstagramAccountsController::class, 'workerScreen'])->name('instagram.accounts.worker-screen');
-    Route::post('/instagram/accounts/worker-click', [InstagramAccountsController::class, 'workerClick'])->name('instagram.accounts.worker-click');
-    Route::post('/instagram/accounts/worker-reload', [InstagramAccountsController::class, 'workerReload'])->name('instagram.accounts.worker-reload');
-    Route::post('/instagram/accounts/logout', [InstagramAccountsController::class, 'logout'])->name('instagram.accounts.logout');
     Route::delete('/instagram/accounts', [InstagramAccountsController::class, 'destroy'])->name('instagram.accounts.destroy');
 
     Route::get('/instagram/raw', [InstagramWorkspaceController::class, 'raw'])->name('instagram.raw');
-    Route::get('/instagram/integrity', [InstagramWorkspaceController::class, 'integrity'])->name('instagram.integrity');
     Route::get('/instagram/status', [InstagramWorkspaceController::class, 'status'])->name('instagram.status');
     Route::get('/instagram/logs', [InstagramWorkspaceController::class, 'logs'])->name('instagram.logs');
     Route::post('/instagram/profile-scan', [InstagramWorkspaceController::class, 'profileScan'])->name('instagram.profile-scan');

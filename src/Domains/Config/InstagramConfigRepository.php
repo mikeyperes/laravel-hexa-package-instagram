@@ -3,13 +3,18 @@
 namespace hexa_package_instagram\Domains\Config;
 
 use hexa_core\Models\Setting;
+use Illuminate\Support\Facades\Cache;
 
 class InstagramConfigRepository
 {
     private const KEY_SESSION_PROFILE = 'instagram_session_profile';
+
     private const KEY_ACCOUNTS = 'instagram_accounts';
+
     private const KEY_DEFAULT_PROFILE_USERNAME = 'instagram_default_profile_username';
+
     private const KEY_DEFAULT_STORY_USERNAME = 'instagram_default_story_username';
+
     private const KEY_DEFAULT_POST_URL = 'instagram_default_post_url';
 
     public function all(): array
@@ -17,7 +22,7 @@ class InstagramConfigRepository
         $sessionProfile = $this->resolveProfile(null);
         $accounts = $this->accounts();
 
-        if ($sessionProfile !== '' && !$this->accountExists($accounts, $sessionProfile)) {
+        if ($sessionProfile !== '' && ! $this->accountExists($accounts, $sessionProfile)) {
             $accounts[] = [
                 'label' => $this->fallbackLabel($sessionProfile),
                 'profile' => $sessionProfile,
@@ -49,18 +54,18 @@ class InstagramConfigRepository
     public function accounts(): array
     {
         $raw = Setting::getValue(self::KEY_ACCOUNTS);
-        if (!is_string($raw) || trim($raw) === '') {
+        if (! is_string($raw) || trim($raw) === '') {
             return [];
         }
 
         $decoded = json_decode($raw, true);
-        if (!is_array($decoded)) {
+        if (! is_array($decoded)) {
             return [];
         }
 
         $accounts = [];
         foreach ($decoded as $account) {
-            if (!is_array($account)) {
+            if (! is_array($account)) {
                 continue;
             }
 
@@ -103,79 +108,79 @@ class InstagramConfigRepository
 
     public function saveAccount(string $label, string $profile, string $instagramUsername, bool $setActive = false): array
     {
-        $profile = $this->normalizeProfile($profile);
-        $label = trim($label) ?: $this->fallbackLabel($profile);
-        $instagramUsername = $this->normalizeUsername($instagramUsername);
-        $accounts = $this->accounts();
-        $now = now()->toDateTimeString();
-        $updated = false;
+        $this->withAccountsLock(function () use ($label, $profile, $instagramUsername, $setActive): void {
+            $profile = $this->normalizeProfile($profile);
+            $label = trim($label) ?: $this->fallbackLabel($profile);
+            $instagramUsername = $this->normalizeUsername($instagramUsername);
+            $accounts = $this->accounts();
+            $now = now()->toDateTimeString();
+            $updated = false;
 
-        foreach ($accounts as &$account) {
-            if (($account['profile'] ?? '') !== $profile) {
-                continue;
+            foreach ($accounts as &$account) {
+                if (($account['profile'] ?? '') !== $profile) {
+                    continue;
+                }
+                $account['label'] = $label;
+                $account['instagram_username'] = $instagramUsername;
+                $account['updated_at'] = $now;
+                $updated = true;
+                break;
+            }
+            unset($account);
+
+            if (! $updated) {
+                $accounts[] = [
+                    'label' => $label,
+                    'profile' => $profile,
+                    'instagram_username' => $instagramUsername,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ];
             }
 
-            $account['label'] = $label;
-            $account['instagram_username'] = $instagramUsername;
-            $account['updated_at'] = $now;
-            $updated = true;
-            break;
-        }
-        unset($account);
-
-        if (!$updated) {
-            $accounts[] = [
-                'label' => $label,
-                'profile' => $profile,
-                'instagram_username' => $instagramUsername,
-                'created_at' => $now,
-                'updated_at' => $now,
-            ];
-        }
-
-        $this->persistAccounts($this->sortAccounts($accounts));
-
-        if ($setActive) {
-            $this->setActiveProfile($profile);
-        }
+            $this->persistAccounts($this->sortAccounts($accounts));
+            if ($setActive) {
+                Setting::setValue(self::KEY_SESSION_PROFILE, $profile, 'packages');
+            }
+        });
 
         return $this->all();
     }
 
     public function setActiveProfile(string $profile): array
     {
-        $profile = $this->normalizeProfile($profile);
-        $accounts = $this->accounts();
-
-        if (!$this->accountExists($accounts, $profile)) {
-            $accounts[] = [
-                'label' => $this->fallbackLabel($profile),
-                'profile' => $profile,
-                'instagram_username' => '',
-                'created_at' => now()->toDateTimeString(),
-                'updated_at' => now()->toDateTimeString(),
-            ];
-            $this->persistAccounts($this->sortAccounts($accounts));
-        }
-
-        Setting::setValue(self::KEY_SESSION_PROFILE, $profile, 'packages');
+        $this->withAccountsLock(function () use ($profile): void {
+            $profile = $this->normalizeProfile($profile);
+            $accounts = $this->accounts();
+            if (! $this->accountExists($accounts, $profile)) {
+                $accounts[] = [
+                    'label' => $this->fallbackLabel($profile),
+                    'profile' => $profile,
+                    'instagram_username' => '',
+                    'created_at' => now()->toDateTimeString(),
+                    'updated_at' => now()->toDateTimeString(),
+                ];
+                $this->persistAccounts($this->sortAccounts($accounts));
+            }
+            Setting::setValue(self::KEY_SESSION_PROFILE, $profile, 'packages');
+        });
 
         return $this->all();
     }
 
     public function deleteAccount(string $profile): array
     {
-        $profile = $this->normalizeProfile($profile);
-        $accounts = array_values(array_filter(
-            $this->accounts(),
-            static fn (array $account): bool => ($account['profile'] ?? '') !== $profile
-        ));
-
-        $this->persistAccounts($accounts);
-
-        if ($this->resolveProfile(null) === $profile) {
-            Setting::setValue(self::KEY_SESSION_PROFILE, $accounts[0]['profile'] ?? $this->defaultProfile(), 'packages');
-        }
+        $this->withAccountsLock(function () use ($profile): void {
+            $profile = $this->normalizeProfile($profile);
+            $accounts = array_values(array_filter(
+                $this->accounts(),
+                static fn (array $account): bool => ($account['profile'] ?? '') !== $profile
+            ));
+            $this->persistAccounts($accounts);
+            if ($this->resolveProfile(null) === $profile) {
+                Setting::setValue(self::KEY_SESSION_PROFILE, $accounts[0]['profile'] ?? $this->defaultProfile(), 'packages');
+            }
+        });
 
         return $this->all();
     }
@@ -212,7 +217,10 @@ class InstagramConfigRepository
 
     private function defaultProfile(): string
     {
-        return $this->normalizeProfile((string) config('instagram.defaults.session_profile', 'instagram-main'));
+        $profile = strtolower(trim((string) config('instagram.defaults.session_profile', 'instagram-main')));
+        $profile = preg_replace('/[^a-z0-9_-]+/', '-', $profile) ?: '';
+
+        return trim($profile, '-') ?: 'instagram-main';
     }
 
     private function fallbackLabel(string $profile): string
@@ -234,6 +242,11 @@ class InstagramConfigRepository
     private function persistAccounts(array $accounts): void
     {
         Setting::setValue(self::KEY_ACCOUNTS, json_encode(array_values($accounts), JSON_UNESCAPED_SLASHES), 'packages');
+    }
+
+    private function withAccountsLock(callable $callback): void
+    {
+        Cache::lock('instagram:accounts', 10)->block(5, $callback);
     }
 
     private function sortAccounts(array $accounts): array

@@ -7,7 +7,6 @@ function instagramRawWorkspace() {
         historyLog: @json($status['raw_history'] ?? []),
         loading: {
             status: false,
-            integrity: false,
             logs: false,
             profileScan: false,
             storyScan: false,
@@ -16,12 +15,6 @@ function instagramRawWorkspace() {
         statusPayload: {
             success: false,
             message: 'Refresh the status to inspect the active Instagram browser profile.',
-            detail: '',
-            data: {},
-        },
-        integrityPayload: {
-            success: false,
-            message: 'Run the integrity test to inspect worker and Instagram session health.',
             detail: '',
             data: {},
         },
@@ -127,29 +120,12 @@ function instagramRawWorkspace() {
                 this.logHistory(data.success ? 'success' : 'warning', 'Refreshed Instagram raw status.', {
                     profile: this.profile,
                     connected: data?.data?.connected ?? null,
-                    verification_required: data?.data?.verification_required ?? null,
-                    current_url: data?.data?.probe?.url ?? null,
+                    authenticated: data?.data?.authenticated ?? null,
+                    account_verified: data?.data?.account_verified ?? null,
+                    transport: data?.data?.transport ?? null,
                 });
             } finally {
                 this.loading.status = false;
-            }
-        },
-
-        async runIntegrity() {
-            this.loading.integrity = true;
-            try {
-                const url = new URL('{{ route('instagram.integrity') }}', window.location.origin);
-                url.searchParams.set('profile', this.profile || 'instagram-main');
-                const { data } = await this.request(url);
-                this.integrityPayload = data;
-                this.statusPayload = data.data?.instagram_status || this.statusPayload;
-                this.logHistory(data.success ? 'success' : 'warning', 'Ran Instagram raw integrity test.', {
-                    profile: this.profile,
-                    connected: data?.data?.connected ?? null,
-                    detail: data?.detail || null,
-                });
-            } finally {
-                this.loading.integrity = false;
             }
         },
 

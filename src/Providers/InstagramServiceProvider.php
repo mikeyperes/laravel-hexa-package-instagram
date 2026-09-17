@@ -2,8 +2,10 @@
 
 namespace hexa_package_instagram\Providers;
 
+use hexa_core\Services\PackageRegistryService;
 use hexa_package_instagram\Domains\Config\InstagramConfigRepository;
 use hexa_package_instagram\Services\InstagramAccountSessionService;
+use hexa_package_instagram\Services\InstagramConnectionService;
 use hexa_package_instagram\Services\InstagramImportService;
 use hexa_package_instagram\Services\InstagramScraperService;
 use Illuminate\Support\ServiceProvider;
@@ -12,22 +14,23 @@ class InstagramServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        $this->mergeConfigFrom(__DIR__ . '/../../config/instagram.php', 'instagram');
+        $this->mergeConfigFrom(__DIR__.'/../../config/instagram.php', 'instagram');
 
         $this->app->singleton(InstagramConfigRepository::class);
         $this->app->singleton(InstagramImportService::class);
         $this->app->singleton(InstagramScraperService::class);
+        $this->app->singleton(InstagramConnectionService::class);
         $this->app->singleton(InstagramAccountSessionService::class);
     }
 
     public function boot(): void
     {
-        if (!config('instagram.enabled', true)) {
+        if (! config('instagram.enabled', true)) {
             return;
         }
 
-        $this->loadRoutesFrom(__DIR__ . '/../../routes/instagram.php');
-        $this->loadViewsFrom(__DIR__ . '/../../resources/views', 'instagram');
+        $this->loadRoutesFrom(__DIR__.'/../../routes/instagram.php');
+        $this->loadViewsFrom(__DIR__.'/../../resources/views', 'instagram');
 
         $this->registerWithPackageRegistry();
         $this->registerDocs();
@@ -36,13 +39,13 @@ class InstagramServiceProvider extends ServiceProvider
     private function registerWithPackageRegistry(): void
     {
         $registryClass = 'hexa_core\\Services\\PackageRegistryService';
-        if (!class_exists($registryClass)) {
+        if (! class_exists($registryClass)) {
             return;
         }
 
         $this->app->booted(function () use ($registryClass) {
             try {
-                /** @var \hexa_core\Services\PackageRegistryService $registry */
+                /** @var PackageRegistryService $registry */
                 $registry = app($registryClass);
 
                 $domainIcon = 'M4 6h16M4 12h16M4 18h16';
@@ -102,7 +105,7 @@ class InstagramServiceProvider extends ServiceProvider
     private function registerDocs(): void
     {
         $docsClass = 'hexa_core\\Services\\DocumentationService';
-        if (!class_exists($docsClass)) {
+        if (! class_exists($docsClass)) {
             return;
         }
 
