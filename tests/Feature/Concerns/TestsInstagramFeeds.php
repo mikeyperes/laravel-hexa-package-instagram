@@ -60,6 +60,48 @@ trait TestsInstagramFeeds
         $this->assertSame('Not read in this batch.', $result['data']['accounts']['never_reached']['message']);
     }
 
+    public function test_story_feeds_read_current_stories_with_links_and_mentions(): void
+    {
+        $bridge = Mockery::mock(BrowserWorkerBridgeContract::class);
+        $bridge->shouldReceive('runAutomation')->once()->withArgs(fn (?string $profile, array $steps): bool => $steps[1]['args']['ids'] === ['111', '222'])->andReturn([
+            'success' => true,
+            'data' => ['results' => [['label' => 'read_stories', 'result' => ['text' => json_encode(['errors' => [], 'reels' => [
+                '111' => ['username' => 'bdhlshul', 'items' => [['pk' => '3992076629349432787', 'taken_at' => 1790040600, 'expiring_at' => 1790127000,
+                    'media_type' => 'video', 'image_url' => 'https://scontent.cdninstagram.com/v/cover.jpg', 'video_url' => 'https://scontent.cdninstagram.com/v/story.mp4',
+                    'accessibility_caption' => '', 'mentions' => ['chabadgables'], 'links' => ['http://bdhls.org/lulav'], 'hashtags' => []]]],
+            ]])]]]],
+        ]);
+        app()->instance(BrowserWorkerBridgeContract::class, $bridge);
+
+        $result = app(InstagramScraperService::class)->storyFeeds('jpn-miami', ['111' => 'bdhlshul', '222' => 'cbiboca', 'not-an-id' => 'x']);
+
+        $this->assertTrue($result['success']);
+        $this->assertSame('1 of 2 accounts have current stories.', $result['message']);
+        $story = $result['data']['reels']['bdhlshul']['stories'][0];
+        $this->assertSame('https://www.instagram.com/stories/bdhlshul/3992076629349432787/', $story['url']);
+        $this->assertSame(['http://bdhls.org/lulav'], $story['links']);
+        $this->assertSame(['chabadgables'], $story['mentions']);
+    }
+
+    public function test_following_feed_lists_the_accounts_one_account_follows(): void
+    {
+        $bridge = Mockery::mock(BrowserWorkerBridgeContract::class);
+        $bridge->shouldReceive('runAutomation')->once()->withArgs(fn (?string $profile, array $steps): bool => $steps[0]['url'] === 'https://www.instagram.com/miamijpn/')->andReturn([
+            'success' => true,
+            'data' => ['results' => [['label' => 'read_following', 'result' => ['text' => json_encode(['user_id' => '999', 'complete' => true, 'error' => null, 'users' => [
+                ['username' => 'kesherconnect', 'full_name' => 'Kesher', 'user_id' => '5', 'is_private' => false, 'is_verified' => false],
+            ]])]]]],
+        ]);
+        app()->instance(BrowserWorkerBridgeContract::class, $bridge);
+
+        $result = app(InstagramScraperService::class)->followingFeed('jpn-miami', '@miamijpn');
+
+        $this->assertTrue($result['success']);
+        $this->assertSame('@miamijpn follows 1 accounts.', $result['message']);
+        $this->assertSame('kesherconnect', $result['data']['users'][0]['username']);
+        $this->assertTrue($result['data']['complete']);
+    }
+
     public function test_profile_feeds_fail_cleanly_when_the_page_has_no_query_module(): void
     {
         $bridge = Mockery::mock(BrowserWorkerBridgeContract::class);

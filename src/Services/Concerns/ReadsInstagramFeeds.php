@@ -25,7 +25,7 @@ trait ReadsInstagramFeeds
     {
         $resolved = $this->config->resolveProfile($profile);
         $usernames = array_values(array_unique(array_filter(array_map(
-            fn ($username): string => $this->config->normalizeUsername((string) $username),
+            fn ($username): string => ltrim($this->config->normalizeUsername((string) $username), '@'),
             $usernames,
         ))));
         if ($usernames === []) {
@@ -98,6 +98,7 @@ trait ReadsInstagramFeeds
             }
             $accounts[$username] = [
                 'success' => (bool) ($account['ok'] ?? false),
+                'user_id' => (string) ($account['user_id'] ?? ''),
                 'status' => (int) ($account['status'] ?? 0),
                 'message' => (bool) ($account['ok'] ?? false) ? 'Recent posts read.' : (string) ($account['error'] ?? 'Recent posts could not be read.'),
                 'elapsed_ms' => (int) ($account['ms'] ?? 0),
@@ -109,6 +110,7 @@ trait ReadsInstagramFeeds
             // Accounts after a rate limit are not attempted in this batch.
             $accounts[$username] ??= [
                 'success' => false,
+                'user_id' => '',
                 'status' => 0,
                 'message' => 'Not read in this batch.',
                 'elapsed_ms' => 0,
@@ -170,6 +172,165 @@ trait ReadsInstagramFeeds
             'accessibility_caption' => (string) ($post['accessibility_caption'] ?? ''),
             'location' => (string) ($post['location'] ?? ''),
         ];
+    }
+
+    /**
+     * Current stories of several accounts, 20 accounts per request, from inside the logged-in browser.
+     *
+     * Each story has its own link (`/stories/<user>/<id>/`), its full-size image or video, when it
+     * was posted and expires, and the accounts, links and hashtags on it. Stories disappear after
+     * 24 hours and their media links expire, so callers download what they keep right away.
+     *
+     * @param array<string, string> $userIds numeric account id => username
+     * @return array{success: bool, message: string, detail: string, status_code: int, data: array<string, mixed>}
+     */
+    public function storyFeeds(?string $profile, array $userIds): array
+    {
+        $resolved = $this->config->resolveProfile($profile);
+        $ids = array_values(array_filter(array_map('strval', array_keys($userIds)), 'ctype_digit'));
+        if ($ids === []) {
+            return $this->failure('At least one numeric Instagram account id is required.', 'profileFeeds() returns each account\'s id as user_id.');
+        }
+
+        $result = $this->browser->runAutomation($resolved, [
+            ['type' => 'goto', 'label' => 'open_home', 'url' => 'https://www.instagram.com/', 'wait_until' => 'domcontentloaded', 'timeout_ms' => 30000, 'wait_ms' => 2000],
+            ['type' => 'evaluate', 'label' => 'read_stories', 'code' => self::restJs(self::storyFeedJs()), 'args' => ['ids' => $ids, 'chunk' => 20, 'min_gap_ms' => 1200, 'max_gap_ms' => 2800]],
+        ], ['transport_timeout_ms' => 60000 + (int) ceil(count($ids) / 20) * 10000]);
+
+        $feed = json_decode((string) ($this->resultByLabel($result, 'read_stories')['text'] ?? ''), true);
+        if ($this->isLoginRedirect($result, []) || ! is_array($feed) || isset($feed['fatal'])) {
+            return $this->feedFailure($result, $resolved, is_array($feed) ? (string) ($feed['fatal'] ?? '') : '', 'Instagram story read failed.');
+        }
+
+        $reels = [];
+        foreach ((array) ($feed['reels'] ?? []) as $id => $reel) {
+            $username = strtolower((string) ($reel['username'] ?? ($userIds[$id] ?? '')));
+            $reels[$username] = [
+                'user_id' => (string) $id,
+                'stories' => array_values(array_map(static fn (array $item): array => $item + [
+                    'url' => 'https://www.instagram.com/stories/' . $username . '/' . $item['pk'] . '/',
+                ], array_filter((array) ($reel['items'] ?? []), 'is_array'))),
+            ];
+        }
+        $errors = (array) ($feed['errors'] ?? []);
+
+        return [
+            'success' => $errors === [] || $reels !== [],
+            'message' => count($reels) . ' of ' . count($ids) . ' accounts have current stories.',
+            'detail' => $errors === [] ? 'Read through Instagram\'s stories feed in the authenticated browser profile.' : 'Some requests failed: ' . json_encode($errors),
+            'status_code' => (int) ($result['status_code'] ?? 0),
+            'data' => ['profile' => $resolved, 'reels' => $reels],
+        ];
+    }
+
+    /**
+     * The accounts one account follows, page by page, from inside the logged-in browser.
+     *
+     * @return array{success: bool, message: string, detail: string, status_code: int, data: array<string, mixed>}
+     */
+    public function followingFeed(?string $profile, string $username, int $max = 500): array
+    {
+        $resolved = $this->config->resolveProfile($profile);
+        $username = ltrim($this->config->normalizeUsername($username), '@');
+        if ($username === '') {
+            return $this->failure('Instagram username is required.', 'Provide the account whose following list should be read.');
+        }
+        $max = max(1, min($max, 2000));
+
+        $result = $this->browser->runAutomation($resolved, [
+            ['type' => 'goto', 'label' => 'open_profile', 'url' => 'https://www.instagram.com/' . $username . '/', 'wait_until' => 'domcontentloaded', 'timeout_ms' => 30000, 'wait_ms' => 2500],
+            ['type' => 'evaluate', 'label' => 'read_following', 'code' => self::restJs(self::followingFeedJs()), 'args' => ['max' => $max, 'page_size' => 50, 'min_gap_ms' => 1500, 'max_gap_ms' => 3500]],
+        ], ['transport_timeout_ms' => 60000 + (int) ceil($max / 50) * 8000]);
+
+        $feed = json_decode((string) ($this->resultByLabel($result, 'read_following')['text'] ?? ''), true);
+        if ($this->isLoginRedirect($result, []) || ! is_array($feed) || isset($feed['fatal'])) {
+            return $this->feedFailure($result, $resolved, is_array($feed) ? (string) ($feed['fatal'] ?? '') : '', 'Instagram following read failed.');
+        }
+        $users = array_values(array_filter((array) ($feed['users'] ?? []), 'is_array'));
+
+        return [
+            'success' => ($feed['error'] ?? null) === null || $users !== [],
+            'message' => '@' . $username . ' follows ' . count($users) . (! empty($feed['complete']) ? '' : '+') . ' accounts.',
+            'detail' => (string) ($feed['error'] ?? 'Read through Instagram\'s following list in the authenticated browser profile.'),
+            'status_code' => (int) ($result['status_code'] ?? 0),
+            'data' => ['profile' => $resolved, 'username' => $username, 'user_id' => (string) ($feed['user_id'] ?? ''), 'complete' => (bool) ($feed['complete'] ?? false), 'users' => $users],
+        ];
+    }
+
+    /** @return array{success: false, message: string, detail: string, status_code: int, data: array<string, mixed>} */
+    private function feedFailure(array $result, string $profile, string $fatal, string $message): array
+    {
+        return [
+            'success' => false,
+            'message' => $this->isLoginRedirect($result, []) ? 'Instagram requires a connected account.' : $message,
+            'detail' => $fatal !== '' ? $fatal : (string) ($result['message'] ?? 'The browser returned no data.'),
+            'status_code' => (int) ($result['status_code'] ?? 0),
+            'data' => ['profile' => $profile],
+        ];
+    }
+
+    /** Wraps a reader in the request headers Instagram's web app sends with its own data calls. */
+    private static function restJs(string $body): string
+    {
+        return <<<'JS'
+return (async () => {
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const gap = () => sleep(args.min_gap_ms + Math.random() * (args.max_gap_ms - args.min_gap_ms));
+  const csrf = (document.cookie.match(/(?:^|; )csrftoken=([^;]+)/) || [])[1] || '';
+  const headers = { 'X-IG-App-ID': (document.documentElement.innerHTML.match(/"X-IG-App-ID":"(\d+)"/) || [])[1] || '936619743392459',
+    'X-ASBD-ID': '129477', 'X-IG-WWW-Claim': sessionStorage.getItem('www-claim-v2') || '0', 'X-CSRFToken': csrf, 'X-Requested-With': 'XMLHttpRequest' };
+  const getJson = async (path) => { const response = await fetch(path, { headers, credentials: 'include' }); let json = null; try { json = JSON.parse(await response.text()); } catch (error) { json = null; } return { status: response.status, json }; };
+  const largest = (candidates) => (candidates || []).slice().sort((a, b) => (b.width || 0) - (a.width || 0))[0]?.url || '';
+JS . "
+" . $body . "
+})();";
+    }
+
+    private static function storyFeedJs(): string
+    {
+        return <<<'JS'
+  const reels = {};
+  const errors = [];
+  for (let index = 0; index < args.ids.length; index += args.chunk) {
+    if (index > 0) await gap();
+    const chunk = args.ids.slice(index, index + args.chunk);
+    const { status, json } = await getJson('/api/v1/feed/reels_media/?' + chunk.map((id) => 'reel_ids=' + encodeURIComponent(id)).join('&'));
+    if (!json) { errors.push({ status, accounts: chunk.length }); if (status === 429) break; continue; }
+    for (const [id, reel] of Object.entries(json.reels || {})) {
+      reels[id] = { username: reel.user?.username || '', items: (reel.items || []).map((item) => ({
+        pk: String(item.pk || ''), taken_at: item.taken_at || 0, expiring_at: item.expiring_at || 0,
+        media_type: item.media_type === 2 ? 'video' : 'image',
+        image_url: largest(item.image_versions2?.candidates), video_url: (item.video_versions || [])[0]?.url || '',
+        accessibility_caption: item.accessibility_caption || '',
+        mentions: (item.reel_mentions || []).map((mention) => mention.user?.username).filter(Boolean),
+        links: (item.story_link_stickers || []).map((sticker) => { const url = sticker.story_link?.url || ''; try { return new URL(url).searchParams.get('u') || url; } catch (error) { return url; } }).filter(Boolean),
+        hashtags: (item.story_hashtags || []).map((tag) => tag.hashtag?.name).filter(Boolean),
+      })).filter((item) => item.pk) };
+    }
+  }
+  return { text: JSON.stringify({ reels, errors }) };
+JS;
+    }
+
+    private static function followingFeedJs(): string
+    {
+        return <<<'JS'
+  const html = document.documentElement.innerHTML;
+  const userId = (html.match(/"profile_id":"(\d+)"/) || html.match(/"page_id":"profilePage_(\d+)"/) || [])[1] || '';
+  if (!userId) return { text: JSON.stringify({ fatal: 'The account id was not found on its profile page.' }) };
+  const users = [];
+  let maxId = '';
+  let error = null;
+  while (users.length < args.max) {
+    const { status, json } = await getJson('/api/v1/friendships/' + userId + '/following/?count=' + args.page_size + (maxId ? '&max_id=' + encodeURIComponent(maxId) : ''));
+    if (!json || !Array.isArray(json.users)) { error = 'Instagram returned status ' + status + '.'; break; }
+    for (const user of json.users) users.push({ username: user.username, full_name: user.full_name || '', user_id: String(user.pk || user.id || ''), is_private: !!user.is_private, is_verified: !!user.is_verified });
+    maxId = json.next_max_id || '';
+    if (!maxId) break;
+    await gap();
+  }
+  return { text: JSON.stringify({ user_id: userId, users: users.slice(0, args.max), complete: !maxId && !error, error }) };
+JS;
     }
 
     /**
@@ -261,7 +422,8 @@ return (async () => {
         if (response.status === 429) break;
         continue;
       }
-      accounts.push({ username, ok: true, status: response.status, ms: Date.now() - started,
+      const own = (connection.edges || []).find((edge) => (edge.node?.user?.username || '').toLowerCase() === username);
+      accounts.push({ username, ok: true, status: response.status, ms: Date.now() - started, user_id: String(own?.node?.user?.pk || own?.node?.user?.id || ''),
         posts: (connection.edges || []).map((edge) => normalize(edge.node)).filter((post) => post.code) });
     } catch (error) {
       accounts.push({ username, ok: false, status: 0, ms: Date.now() - started, error: String(error).slice(0, 200) });

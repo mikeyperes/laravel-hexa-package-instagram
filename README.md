@@ -26,6 +26,15 @@ with a short random gap. The query id and request tokens are read from Instagram
 run, so they follow Instagram's releases, and the login never leaves the browser. Each post comes
 back in `postScan()`'s shape (full-size images of every photo, caption, date, video flag, pinned
 flag). An account that can't be read is marked unsuccessful so callers fall back to `profileScan()`.
+Each account also returns its numeric `user_id`.
+
+`storyFeeds($profile, [user_id => username, ...])` reads the current stories of up to 20 accounts
+per request: each story's own link (`/stories/<user>/<id>/`), full-size image or video, posting and
+expiry times, and the accounts, links and hashtags on it. Stories expire after 24 hours and their
+media links sooner, so download what you keep right away.
+
+`followingFeed($profile, $username, $max)` lists the accounts one account follows (username, name,
+id, private/verified), 50 per page.
 
 ## Package ownership
 
