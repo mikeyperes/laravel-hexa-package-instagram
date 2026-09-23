@@ -88,7 +88,7 @@ const normalizePostHref = (value) => {
   if (!href) return '';
   try {
     const url = new URL(href.startsWith('http') ? href : `https://www.instagram.com${href.startsWith('/') ? '' : '/'}${href}`);
-    const match = url.pathname.match(/^\/(?:[^/]+\/)?(p|reel|tv)\/([A-Za-z0-9._-]{5,20})\/?$/i);
+    const match = url.pathname.match(/^\/(?:[^/]+\/)?(p|reel|tv)\/([A-Za-z0-9._-]{5,64})\/?$/i);
     if (!match) return '';
     return `https://www.instagram.com/${match[1].toLowerCase()}/${match[2]}/`;
   } catch (_error) {
@@ -471,7 +471,7 @@ JS;
         }
 
         $path = (string) parse_url($url, PHP_URL_PATH);
-        if (preg_match('~/(?:[^/]+/)?(p|reel|tv)/([A-Za-z0-9_-]{5,20})(?:/|$)~i', $path, $match)) {
+        if (preg_match('~/(?:[^/]+/)?(p|reel|tv)/([A-Za-z0-9_-]{5,64})(?:/|$)~i', $path, $match)) {
             return 'https://www.instagram.com/' . strtolower((string) $match[1]) . '/' . (string) $match[2] . '/';
         }
 

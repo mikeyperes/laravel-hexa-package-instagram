@@ -1,5 +1,13 @@
 # Instagram package bug log
 
+## IG-2026-09-23-02 — Posts with long ids were never collected from profile pages
+
+- **Symptom:** @solfli always showed 0 posts found, although its profile shows posts.
+- **Impact:** Every post whose link carries Instagram's long post id (posts from private accounts carry the short id plus a suffix) was silently dropped by profile scans and refused by post scans.
+- **Root cause:** The profile link reader and `normalizePostUrl()` accepted post ids of 5–20 characters; long ids are 39.
+- **Patch:** Post ids of 5–64 characters are accepted. The new `profileFeeds()` reader returns the canonical short id (the post's numeric id in base 64) for such posts.
+- **Guard:** `test_profile_feeds_read_a_batch_into_post_scan_shape` (long id → `CB1vrXrJdZR`).
+
 ## IG-2026-09-23-01 — Schemeless profile URL was rejected as a username
 
 - **Symptom:** `jpn-miami:add-instagram-account "instagram.com/cluballenby/"` failed with "Enter one valid Instagram username."

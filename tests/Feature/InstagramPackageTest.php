@@ -6,6 +6,7 @@ require_once __DIR__ . '/Concerns/TestsInstagramAccountSessions.php';
 require_once __DIR__ . '/Concerns/TestsInstagramPublicImportsAndScans.php';
 require_once __DIR__ . '/Concerns/TestsInstagramVerificationAndRoutes.php';
 require_once __DIR__ . '/Concerns/TestsInstagramProfileDiscovery.php';
+require_once __DIR__ . '/Concerns/TestsInstagramFeeds.php';
 
 use hexa_core\Services\CredentialService;
 use hexa_package_browser_worker\Contracts\BrowserWorkerBridgeContract;
@@ -24,6 +25,7 @@ class InstagramPackageTest extends TestCase
     use \Tests\Feature\Concerns\TestsInstagramPublicImportsAndScans;
     use \Tests\Feature\Concerns\TestsInstagramVerificationAndRoutes;
     use \Tests\Feature\Concerns\TestsInstagramProfileDiscovery;
+    use \Tests\Feature\Concerns\TestsInstagramFeeds;
 
     protected function setUp(): void
     {

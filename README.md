@@ -17,6 +17,16 @@ Dedicated Instagram package for Hexa.
 - `/settings/instagram`
 - `/instagram/raw`
 
+## Reading recent posts fast
+
+`InstagramScraperService::profileFeeds($profile, $usernames, $limit)` reads several accounts'
+recent posts in one browser session: it opens the first account's profile once, then asks
+Instagram's own web data query (`PolarisProfilePostsQuery`) for each account, about 1 second each
+with a short random gap. The query id and request tokens are read from Instagram's page on every
+run, so they follow Instagram's releases, and the login never leaves the browser. Each post comes
+back in `postScan()`'s shape (full-size images of every photo, caption, date, video flag, pinned
+flag). An account that can't be read is marked unsuccessful so callers fall back to `profileScan()`.
+
 ## Package ownership
 
 This package owns:
