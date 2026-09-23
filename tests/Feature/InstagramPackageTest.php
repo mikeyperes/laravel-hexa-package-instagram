@@ -67,4 +67,15 @@ class InstagramPackageTest extends TestCase
             $table->timestamps();
         });
     }
+
+    public function test_username_normalization_accepts_schemeless_and_shared_profile_urls(): void
+    {
+        // BUGLOG IG-2026-09-23-01: "instagram.com/cluballenby/" was rejected when added to the JPN list.
+        $config = app(InstagramConfigRepository::class);
+
+        $this->assertSame('cluballenby', $config->normalizeUsername('instagram.com/cluballenby/'));
+        $this->assertSame('rookerymiami', $config->normalizeUsername('https://www.instagram.com/rookerymiami/'));
+        $this->assertSame('cluballenby', $config->normalizeUsername('www.instagram.com/ClubAllenby?igsh=abc123'));
+        $this->assertSame('@miamijpn', $config->normalizeUsername('@MiamiJPN'));
+    }
 }

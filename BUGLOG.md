@@ -1,5 +1,13 @@
 # Instagram package bug log
 
+## IG-2026-09-23-01 — Schemeless profile URL was rejected as a username
+
+- **Symptom:** `jpn-miami:add-instagram-account "instagram.com/cluballenby/"` failed with "Enter one valid Instagram username."
+- **Impact:** Profile links copied without `https://`, or with a shared-link `?igsh=` query, could not be added to any saved list.
+- **Root cause:** `normalizeUsername()` removed the Instagram host only when the URL began with `http://` or `https://`, and it kept query strings.
+- **Patch:** The optional scheme, `www.` and `m.` host prefixes, and any query or fragment are removed before the username is validated.
+- **Guard:** `test_username_normalization_accepts_schemeless_and_shared_profile_urls`.
+
 ## IG-2026-09-17-01 — Connection ownership was duplicated and account identity was optional
 
 - **Symptom:** Instagram login, verification-code entry, screenshots, clicks, logout, proxy diagnostics, and session checks were implemented again inside this package.

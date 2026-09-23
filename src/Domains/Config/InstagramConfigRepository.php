@@ -208,8 +208,10 @@ class InstagramConfigRepository
 
     public function normalizeUsername(string $username): string
     {
+        // CRITICAL — see BUGLOG.md IG-2026-09-23-01: accept schemeless profile URLs and shared-link queries.
         $username = trim($username);
-        $username = preg_replace('#^https?://(www\.)?instagram\.com/#i', '', $username) ?: $username;
+        $username = preg_replace('#^(?:https?://)?(?:www\.|m\.)?instagram\.com/#i', '', $username) ?: $username;
+        $username = preg_replace('/[?#].*$/', '', $username) ?? $username;
         $username = trim($username, "/ \t\n\r\0\x0B");
 
         return strtolower($username);
