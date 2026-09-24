@@ -161,6 +161,59 @@ class InstagramPublisherService
         return $this->outcome(true, 'removed', $result['message'], $result['detail'], $this->recordData($record));
     }
 
+    /**
+     * Delete the live stories or posts published under these keys (all accounts of the profile).
+     *
+     * @param array<int, string> $sourceKeys
+     * @param callable(array<string, mixed>): void|null $onResult called after each item
+     * @return array<int, array<string, mixed>> one outcome per key
+     */
+    public function unpublishKeys(?string $profile, string $kind, array $sourceKeys, ?callable $onResult = null): array
+    {
+        $profile = $this->profile($profile);
+        $results = [];
+        foreach (array_values(array_unique(array_filter($sourceKeys))) as $key) {
+            $records = InstagramPublication::query()->where('profile', $profile)->where('kind', $kind)
+                ->where('source_key', $key)->where('status', 'live')->orderBy('id')->get();
+            $outcome = $records->isEmpty()
+                ? $this->outcome(true, 'not_live', 'Nothing live under this key.', '', ['source_key' => $key])
+                : null;
+            foreach ($records as $record) {
+                $outcome = $this->unpublish($record);
+                if (! $outcome['success']) {
+                    break;
+                }
+            }
+            $results[$key] = $outcome + ['source_key' => $key];
+            if ($onResult) {
+                $onResult($results[$key]);
+            }
+        }
+
+        return $results;
+    }
+
+    /** The recorded publication for an Instagram post or story link, if it was published through the package. */
+    public function findByUrl(string $url): ?InstagramPublication
+    {
+        $link = $this->instagram->parseInstagramLink($url);
+        if ($link === null) {
+            return null;
+        }
+
+        return InstagramPublication::query()
+            ->where(function ($query) use ($link): void {
+                if (($link['shortcode'] ?? '') !== '') {
+                    $query->orWhere('media_code', $link['shortcode']);
+                }
+                if (($link['pk'] ?? '') !== '') {
+                    $query->orWhere('media_pk', $link['pk']);
+                }
+            })
+            ->latest('id')
+            ->first();
+    }
+
     /** Seconds to pause between two items of one batch (random within the configured range). */
     public function gapSeconds(): int
     {
