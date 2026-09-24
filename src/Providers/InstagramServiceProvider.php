@@ -22,6 +22,7 @@ class InstagramServiceProvider extends ServiceProvider
         $this->app->singleton(\hexa_package_instagram\Services\InstagramFollowAuditService::class);
         $this->app->singleton(InstagramConnectionService::class);
         $this->app->singleton(InstagramAccountSessionService::class);
+        $this->app->singleton(\hexa_package_instagram\Services\InstagramPublisherService::class);
     }
 
     public function boot(): void
@@ -32,12 +33,17 @@ class InstagramServiceProvider extends ServiceProvider
 
         $this->loadRoutesFrom(__DIR__.'/../../routes/instagram.php');
         $this->loadViewsFrom(__DIR__.'/../../resources/views', 'instagram');
+        $this->loadMigrationsFrom(__DIR__.'/../../database/migrations');
 
         $this->registerWithPackageRegistry();
         $this->registerDocs();
 
         if ($this->app->runningInConsole()) {
-            $this->commands([\hexa_package_instagram\Console\InstagramFollowAuditCommand::class, \hexa_package_instagram\Console\InstagramFollowCommand::class]);
+            $this->commands([\hexa_package_instagram\Console\InstagramFollowAuditCommand::class, \hexa_package_instagram\Console\InstagramFollowCommand::class,
+                \hexa_package_instagram\Console\InstagramPublishCommand::class,
+                \hexa_package_instagram\Console\InstagramUnpublishCommand::class,
+                \hexa_package_instagram\Console\InstagramPublicationsCommand::class,
+            ]);
         }
     }
 
