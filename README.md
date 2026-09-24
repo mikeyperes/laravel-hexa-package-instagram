@@ -50,7 +50,10 @@ php artisan instagram:publish story /path/or/https/image.jpg --profile=jpn-miami
 php artisan instagram:publish post image.jpg --caption="..." --profile=jpn-miami --key=jpn-event:1979
 php artisan instagram:publications --kind=story --key=jpn-event:1979   # live check
 php artisan instagram:unpublish <publication id>                      # delete + confirm
+php artisan instagram:edit <publication id> --caption="..."            # replace a post caption + confirm
 ```
+
+`publish(..., updateCaption: true)` edits a live post's caption instead of skipping it when the caption changed.
 
 Browser steps used: `emulate_mobile` and `choose_file` (Browser Worker 1.12.18+). Staged images go to `browser-worker.profile_provisioning.upload_base_path` and are deleted after each run.
 

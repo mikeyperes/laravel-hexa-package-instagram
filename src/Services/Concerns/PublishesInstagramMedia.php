@@ -96,6 +96,58 @@ trait PublishesInstagramMedia
     }
 
     /**
+     * Replace the caption of one of the account's feed posts (More options → Edit → Done), then read the
+     * post back and confirm the caption matches.
+     *
+     * @return array{success: bool, message: string, detail: string, status_code: int, data: array<string, mixed>}
+     */
+    public function editFeedCaption(?string $profile, string $code, string $caption): array
+    {
+        $resolved = $this->config->resolveProfile($profile);
+        if (! preg_match('/^[A-Za-z0-9_-]{5,40}$/', $code)) {
+            return $this->failure('A post short id is required.', 'Use the code recorded when the post was published.');
+        }
+        $caption = mb_substr(trim($caption), 0, (int) config('instagram.publishing.caption_max', 2200));
+        $steps = [
+            ['type' => 'goto', 'label' => 'open_post', 'url' => 'https://www.instagram.com/p/' . $code . '/', 'wait_until' => 'domcontentloaded', 'timeout_ms' => 30000, 'wait_ms' => 4000],
+            ['type' => 'click', 'label' => 'menu', 'selector' => 'main svg[aria-label="More options"], [role=dialog] svg[aria-label="More options"]', 'timeout_ms' => 15000, 'wait_ms' => 1200],
+            ['type' => 'click', 'label' => 'edit', 'selector' => 'text="Edit" >> visible=true', 'timeout_ms' => 10000, 'wait_ms' => 3000],
+            ['type' => 'click', 'label' => 'caption_box', 'selector' => '[role=dialog] div[contenteditable="true"]', 'timeout_ms' => 15000, 'wait_ms' => 500],
+            ['type' => 'press', 'label' => 'select_all', 'key' => 'Control+A'],
+            ['type' => 'press', 'label' => 'clear', 'key' => 'Backspace'],
+        ];
+        if ($caption !== '') {
+            $steps[] = ['type' => 'type_text', 'label' => 'caption', 'text' => $caption, 'delay_ms' => 5];
+        }
+        $steps[] = ['type' => 'click', 'label' => 'done', 'selector' => '[role=dialog] [role=button]:text-is("Done"), [role=dialog] button:text-is("Done")', 'timeout_ms' => 15000, 'wait_ms' => 4000];
+        $result = $this->browser->runAutomation($resolved, $steps, ['transport_timeout_ms' => 120000 + mb_strlen($caption) * 20]);
+
+        $failedStep = collect((array) ($result['data']['results'] ?? []))->first(fn ($step): bool => ($step['success'] ?? true) === false);
+        if ($failedStep || ! ($result['success'] ?? false)) {
+            return $this->feedFailure($result, $resolved, $failedStep ? ('Step "' . ($failedStep['label'] ?? '?') . '" failed: ' . ($failedStep['error'] ?? '')) : '', 'The caption was not saved.');
+        }
+        $read = $this->mediaByUrl($resolved, 'https://www.instagram.com/p/' . $code . '/');
+        $saved = trim((string) ($read['data']['item']['caption'] ?? ''));
+        $matches = $read['success'] && self::sameCaption($saved, $caption);
+
+        return [
+            'success' => $matches,
+            'message' => $matches ? 'Caption updated and confirmed.' : 'The caption on Instagram does not match after saving.',
+            'detail' => $matches ? 'Read back from the post.' : ($read['success'] ? 'Instagram shows: ' . mb_substr($saved, 0, 200) : $read['message']),
+            'status_code' => (int) ($result['status_code'] ?? 0),
+            'data' => ['profile' => $resolved, 'code' => $code, 'caption' => $saved],
+        ];
+    }
+
+    /** Captions compared without differences in spacing or line-break style. */
+    private static function sameCaption(string $a, string $b): bool
+    {
+        $normal = fn (string $text): string => preg_replace('/\s+/u', ' ', trim($text));
+
+        return $normal($a) === $normal($b);
+    }
+
+    /**
      * Delete one of the account's stories (Menu → Delete on the story) and confirm it is gone.
      *
      * @return array{success: bool, message: string, detail: string, status_code: int, data: array<string, mixed>}

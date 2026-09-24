@@ -55,12 +55,13 @@ class InstagramPublisherService
 
     /**
      * Publish one image (a file path, an https URL or raw bytes) as a story or feed post. With a key and
-     * without $force, a key that is already live is skipped (outcome "already_live").
+     * without $force, a key that is already live is skipped (outcome "already_live"); with $updateCaption
+     * a live post whose caption differs is edited instead (outcome "edited" or "unchanged").
      *
      * @param array<string, mixed> $meta stored with the record (for example the caller's item title)
      * @return array{success: bool, outcome: string, message: string, detail: string, data: array<string, mixed>}
      */
-    public function publish(?string $profile, string $kind, string $image, string $caption = '', ?string $sourceKey = null, bool $force = false, array $meta = []): array
+    public function publish(?string $profile, string $kind, string $image, string $caption = '', ?string $sourceKey = null, bool $force = false, array $meta = [], bool $updateCaption = false): array
     {
         if (! in_array($kind, self::KINDS, true)) {
             return $this->outcome(false, 'failed', 'Kind must be story or post.');
@@ -75,6 +76,10 @@ class InstagramPublisherService
             }
             $current = $state['data']['keys'][$sourceKey];
             if ($current['state'] === 'live') {
+                if ($updateCaption && $kind === 'post' && ($record = InstagramPublication::query()->find($current['publication_id'] ?? 0))) {
+                    return $this->editCaption($record, $caption);
+                }
+
                 return $this->outcome(true, 'already_live', ($kind === 'story' ? 'Story' : 'Post') . ' already live; not posted again.', '', ['source_key' => $sourceKey] + $current);
             }
         }
@@ -111,6 +116,28 @@ class InstagramPublisherService
         ]);
 
         return $this->outcome(true, 'published', $result['message'], $result['detail'], $this->recordData($record));
+    }
+
+    /**
+     * Replace the caption of a published feed post and keep the record's caption in step.
+     *
+     * @return array{success: bool, outcome: string, message: string, detail: string, data: array<string, mixed>}
+     */
+    public function editCaption(InstagramPublication $record, string $caption): array
+    {
+        if ($record->kind !== 'post' || $record->status !== 'live') {
+            return $this->outcome(false, 'failed', 'Only a live feed post can be edited.', '', $this->recordData($record));
+        }
+        if (trim((string) $record->caption) === trim($caption)) {
+            return $this->outcome(true, 'unchanged', 'Caption already up to date.', '', $this->recordData($record));
+        }
+        $result = $this->instagram->editFeedCaption($record->profile, (string) $record->media_code, $caption);
+        if (! $result['success']) {
+            return $this->outcome(false, 'failed', $result['message'], $result['detail'], $this->recordData($record));
+        }
+        $record->forceFill(['caption' => $caption])->save();
+
+        return $this->outcome(true, 'edited', $result['message'], $result['detail'], $this->recordData($record));
     }
 
     /**

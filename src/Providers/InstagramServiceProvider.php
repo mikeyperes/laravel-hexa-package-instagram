@@ -42,6 +42,7 @@ class InstagramServiceProvider extends ServiceProvider
             $this->commands([\hexa_package_instagram\Console\InstagramFollowAuditCommand::class, \hexa_package_instagram\Console\InstagramFollowCommand::class,
                 \hexa_package_instagram\Console\InstagramPublishCommand::class,
                 \hexa_package_instagram\Console\InstagramUnpublishCommand::class,
+                \hexa_package_instagram\Console\InstagramEditCommand::class,
                 \hexa_package_instagram\Console\InstagramPublicationsCommand::class,
             ]);
         }
