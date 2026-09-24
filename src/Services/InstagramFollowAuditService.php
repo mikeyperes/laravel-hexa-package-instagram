@@ -27,6 +27,7 @@ class InstagramFollowAuditService
      * answers it yes (for example "is this post an invitation to a dated event?"); those posts are returned
      * as `event_posts` (url, image, title, date, place) so the reviewer can see why the account was flagged.
      * `only_usernames` re-checks exactly those accounts from the network, ignoring the skip lists.
+     * `photo_posts_only` ignores reels and videos; `recent_days` ignores older posts (both before any check).
      * `post_judge(array $candidate, array $post): ?array` lets the caller apply its own post check (for
      * example its production event classifier) to recent posts, newest first; the first post it returns
      * an event for flags the account, and that event is returned in `event_posts`.
@@ -221,18 +222,25 @@ class InstagramFollowAuditService
                         'posted_at' => (string) ($post['posted_at'] ?? ''),
                         'caption' => mb_substr((string) (($post['caption_blocks'] ?? [])[0] ?? ''), 0, 600),
                         'image_url' => (string) (($post['cover_url'] ?? '') ?: (($post['image_urls'] ?? [])[0] ?? '')),
+                        'kind' => (($post['product_type'] ?? '') === 'clips' || (($post['primary_media_box']['tag'] ?? '') === 'video')) ? 'video' : 'photo',
                         'image_text' => mb_substr((string) ($post['accessibility_caption'] ?? ''), 0, 300),
                         'location' => (string) ($post['location'] ?? ''),
                     ], $posts),
                 ];
+                // Only posts the caller can use count: photo posts when `photo_posts_only` (reels and videos
+                // are ignored), posted within `recent_days` (pinned old posts are ignored).
                 $recentDays = (int) ($options['recent_days'] ?? 0);
-                if (($options['post_question'] ?? '') !== '' && $recentDays > 0) {
-                    $since = now()->subDays($recentDays);
-                    $newest = collect($evidence['posts'])->pluck('posted_at')->filter()->sortDesc()->first();
-                    $evidence['posts'] = array_values(array_filter($evidence['posts'], static fn (array $post): bool => $post['posted_at'] !== '' && \Carbon\Carbon::parse($post['posted_at'])->greaterThanOrEqualTo($since)));
+                $photosOnly = (bool) ($options['photo_posts_only'] ?? false);
+                if ($recentDays > 0 || $photosOnly) {
+                    $since = $recentDays > 0 ? now()->subDays($recentDays) : null;
+                    $usable = array_values(array_filter($evidence['posts'], static fn (array $post): bool => (! $photosOnly || $post['kind'] === 'photo')));
+                    $newest = collect($usable)->pluck('posted_at')->filter()->sortDesc()->first();
+                    $evidence['posts'] = array_values(array_filter($usable, static fn (array $post): bool => $since === null
+                        || ($post['posted_at'] !== '' && \Carbon\Carbon::parse($post['posted_at'])->greaterThanOrEqualTo($since))));
                     if ($evidence['posts'] === []) {
+                        $what = $photosOnly ? 'photo posts' : 'posts';
                         $report($candidate + ['status' => 'inactive', 'score' => 0, 'answers' => [], 'event_posts' => [],
-                            'reason' => 'No posts in the last '.$recentDays.' days'.($newest ? ' (newest '.\Carbon\Carbon::parse($newest)->format('M j, Y').')' : '').'.']);
+                            'reason' => 'No '.$what.($recentDays > 0 ? ' in the last '.$recentDays.' days' : '').($newest ? ' (newest '.\Carbon\Carbon::parse($newest)->format('M j, Y').')' : '').'.']);
                         continue;
                     }
                 }
