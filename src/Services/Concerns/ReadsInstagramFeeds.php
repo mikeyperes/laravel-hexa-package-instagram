@@ -305,6 +305,9 @@ JS . "
         mentions: (item.reel_mentions || []).map((mention) => mention.user?.username).filter(Boolean),
         links: (item.story_link_stickers || []).map((sticker) => { const url = sticker.story_link?.url || ''; try { return new URL(url).searchParams.get('u') || url; } catch (error) { return url; } }).filter(Boolean),
         hashtags: (item.story_hashtags || []).map((tag) => tag.hashtag?.name).filter(Boolean),
+        location: item.story_locations?.[0]?.location?.name || '',
+        // A story that shares a post points at that post, so the post can be used (and deduplicated) instead.
+        reshared_post: (item.story_feed_media || [])[0] ? { pk: String(item.story_feed_media[0].media_id || '').split('_')[0], code: item.story_feed_media[0].media_code || '' } : null,
       })).filter((item) => item.pk) };
     }
   }

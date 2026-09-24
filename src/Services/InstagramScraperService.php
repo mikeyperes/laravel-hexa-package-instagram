@@ -10,6 +10,7 @@ class InstagramScraperService
     use \hexa_package_instagram\Services\Concerns\ScansInstagramProfiles;
     use \hexa_package_instagram\Services\Concerns\ScansInstagramPosts;
     use \hexa_package_instagram\Services\Concerns\ReadsInstagramFeeds;
+    use \hexa_package_instagram\Services\Concerns\ReadsInstagramAccounts;
 
     public function __construct(
         private InstagramConfigRepository $config,

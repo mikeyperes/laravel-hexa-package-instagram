@@ -2,7 +2,14 @@
 
 return [
     'enabled' => env('INSTAGRAM_ENABLED', true),
-    'version' => '1.3.0',
+    'version' => '1.4.0',
+    // Account discovery through another account's following list or stories (InstagramFollowAuditService).
+    'follow_audit' => [
+        'model' => env('INSTAGRAM_FOLLOW_AUDIT_MODEL', 'claude-haiku-4-5-20251001'),
+        'limit' => 60,
+        'batch_size' => 8,
+        'max_highlights' => 15,
+    ],
     // Server-side Instagram page and image requests leave through this browser profile's route
     // (for example its NordVPN route) instead of the server IP. Empty keeps the direct connection.
     'http_route_profile' => env('INSTAGRAM_HTTP_ROUTE_PROFILE', ''),

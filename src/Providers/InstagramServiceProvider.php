@@ -19,6 +19,7 @@ class InstagramServiceProvider extends ServiceProvider
         $this->app->singleton(InstagramConfigRepository::class);
         $this->app->singleton(InstagramImportService::class);
         $this->app->singleton(InstagramScraperService::class);
+        $this->app->singleton(\hexa_package_instagram\Services\InstagramFollowAuditService::class);
         $this->app->singleton(InstagramConnectionService::class);
         $this->app->singleton(InstagramAccountSessionService::class);
     }
@@ -34,6 +35,10 @@ class InstagramServiceProvider extends ServiceProvider
 
         $this->registerWithPackageRegistry();
         $this->registerDocs();
+
+        if ($this->app->runningInConsole()) {
+            $this->commands([\hexa_package_instagram\Console\InstagramFollowAuditCommand::class]);
+        }
     }
 
     private function registerWithPackageRegistry(): void
