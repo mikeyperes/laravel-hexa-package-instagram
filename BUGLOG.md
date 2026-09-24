@@ -1,5 +1,14 @@
 # Instagram package bug log
 
+## IG-2026-09-24-01 — Every story after the first failed once the account had a live story
+
+- **Audit:** JPN story run to @miamijpn (#2067 and #2124 after #2109 posted).
+- **Symptom:** `choose_image` timed out waiting for a file chooser; nothing was posted.
+- **Impact:** Only one story per 24 hours could be posted to an account.
+- **Root cause:** With a story live, the "Your story" tray item opens the viewer and the story camera input sits in the header, 9 levels from the "Your story" text; the input finder looked only 4 levels up and returned missing.
+- **Patch:** When no input is near "Your story", use the header's story-creator input (the file input accepting PNG/AVIF), which opens Instagram's "Add to your story" editor with or without a live story (verified on the live page; the JPEG-only header input does not open it).
+- **Guard:** `storyInputJs()` marked CRITICAL.
+
 ## IG-2026-09-23-02 — Posts with long ids were never collected from profile pages
 
 - **Symptom:** @solfli always showed 0 posts found, although its profile shows posts.

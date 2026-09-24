@@ -327,6 +327,11 @@ for (const input of document.querySelectorAll('input[type=file]')) {
     if (node && /Your story/.test(node.innerText || '')) { input.setAttribute('data-hexa-story-input', '1'); return { text: 'found' }; }
   }
 }
+// CRITICAL — see BUGLOG.md IG-2026-09-24-01: with a story already live the tray item opens the viewer and has no
+// upload input; the header's story-creator input (the one accepting PNG/AVIF) opens the same story editor.
+for (const input of document.querySelectorAll('header input[type=file], form input[type=file]')) {
+  if (/image\/png/.test(input.accept || '')) { input.setAttribute('data-hexa-story-input', '1'); return { text: 'found_header' }; }
+}
 return { text: 'missing' };
 JS;
     }
