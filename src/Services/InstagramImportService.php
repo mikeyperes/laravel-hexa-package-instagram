@@ -277,7 +277,7 @@ class InstagramImportService
         $response = $this->browserHttp->getHtml($url, [
             'timeout' => 20,
             'headers' => $this->browserHeaders(),
-        ]);
+        ] + $this->routeOptions());
 
         if (!empty($response['error'])) {
             return [
@@ -459,7 +459,7 @@ class InstagramImportService
         $response = $this->browserHttp->getBinary($imageUrl, [
             'timeout' => 30,
             'headers' => $this->browserHeaders(),
-        ]);
+        ] + $this->routeOptions());
 
         $headers = is_array($response['headers'] ?? null) ? $response['headers'] : [];
         $mimeHeader = $headers['Content-Type'][0] ?? $headers['content-type'][0] ?? 'image/jpeg';
@@ -570,5 +570,16 @@ class InstagramImportService
     public function browserHeaders(): array
     {
         return $this->browserHttp->headers('chrome');
+    }
+
+    /**
+     * Request options that send Instagram requests through the configured browser profile's route.
+     */
+    private function routeOptions(): array
+    {
+        return [
+            'route_profile' => (string) config('instagram.http_route_profile', ''),
+            'require_route' => (bool) config('instagram.http_require_route', false),
+        ];
     }
 }
