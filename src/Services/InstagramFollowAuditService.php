@@ -23,7 +23,12 @@ class InstagramFollowAuditService
      * `on_start(array $info)` is called once candidates are known and `on_result(array $row, int $n, int $total)`
      * after each account is checked, so callers can show progress live.
      *
-     * @param array{source?: string, limit?: int, posts_per_account?: int, max_following?: int, exclude_usernames?: array<int, string>, exclude_ids?: array<int, string>, model?: string, context?: string, on_start?: callable, on_result?: callable} $options
+     * With `post_question`, an account also needs at least one post from the last `recent_days` days that
+     * answers it yes (for example "is this post an invitation to a dated event?"); those posts are returned
+     * as `event_posts` (url, image, title, date, place) so the reviewer can see why the account was flagged.
+     * `only_usernames` re-checks exactly those accounts from the network, ignoring the skip lists.
+     *
+     * @param array{source?: string, limit?: int, posts_per_account?: int, max_following?: int, exclude_usernames?: array<int, string>, exclude_ids?: array<int, string>, only_usernames?: array<int, string>, post_question?: string, recent_days?: int, model?: string, context?: string, on_start?: callable, on_result?: callable} $options
      * @return array{success: bool, message: string, data: array<string, mixed>}
      */
     public function audit(?string $profile, string $account, array $criteria, array $options = []): array
@@ -48,7 +53,16 @@ class InstagramFollowAuditService
         $excludeNames[$account] = true;
         $candidates = [];
         $excludedNames = [];
+        $only = array_flip(array_map(static fn ($name): string => strtolower(ltrim((string) $name, '@')), (array) ($options['only_usernames'] ?? [])));
         foreach ($found['candidates'] as $candidate) {
+            if ($only !== []) {
+                if (isset($only[$candidate['username']])) {
+                    $candidates[] = $candidate;
+                } else {
+                    $excludedNames[] = $candidate['username'];
+                }
+                continue;
+            }
             if (isset($excludeNames[$candidate['username']]) || ($candidate['user_id'] !== '' && isset($excludeIds[$candidate['user_id']]))) {
                 $excludedNames[] = $candidate['username'];
                 continue;
@@ -91,6 +105,7 @@ class InstagramFollowAuditService
                 'matches' => $matches,
                 'screened_out' => array_values(array_filter($screened, static fn (array $row): bool => $row['status'] === 'no_match')),
                 'unreadable' => array_values(array_filter($screened, static fn (array $row): bool => $row['status'] === 'unreadable')),
+                'inactive' => array_values(array_filter($screened, static fn (array $row): bool => $row['status'] === 'inactive')),
                 'private' => array_values(array_filter($screened, static fn (array $row): bool => $row['status'] === 'private')),
                 'model' => $this->model($options),
             ],
@@ -202,10 +217,22 @@ class InstagramFollowAuditService
                         'url' => (string) ($post['url'] ?? ''),
                         'posted_at' => (string) ($post['posted_at'] ?? ''),
                         'caption' => mb_substr((string) (($post['caption_blocks'] ?? [])[0] ?? ''), 0, 600),
+                        'image_url' => (string) (($post['cover_url'] ?? '') ?: (($post['image_urls'] ?? [])[0] ?? '')),
                         'image_text' => mb_substr((string) ($post['accessibility_caption'] ?? ''), 0, 300),
                         'location' => (string) ($post['location'] ?? ''),
                     ], $posts),
                 ];
+                $recentDays = (int) ($options['recent_days'] ?? 0);
+                if (($options['post_question'] ?? '') !== '' && $recentDays > 0) {
+                    $since = now()->subDays($recentDays);
+                    $newest = collect($evidence['posts'])->pluck('posted_at')->filter()->sortDesc()->first();
+                    $evidence['posts'] = array_values(array_filter($evidence['posts'], static fn (array $post): bool => $post['posted_at'] !== '' && \Carbon\Carbon::parse($post['posted_at'])->greaterThanOrEqualTo($since)));
+                    if ($evidence['posts'] === []) {
+                        $report($candidate + ['status' => 'inactive', 'score' => 0, 'answers' => [], 'event_posts' => [],
+                            'reason' => 'No posts in the last '.$recentDays.' days'.($newest ? ' (newest '.\Carbon\Carbon::parse($newest)->format('M j, Y').')' : '').'.']);
+                        continue;
+                    }
+                }
                 $report($candidate + $this->judge($candidate, $evidence, $criteria, $options) + ['evidence' => $evidence]);
             }
         }
@@ -220,14 +247,22 @@ class InstagramFollowAuditService
     private function judge(array $candidate, array $evidence, array $criteria, array $options): array
     {
         $questions = implode("\n", array_map(static fn (string $key, string $question): string => '- ' . $key . ': ' . $question, array_keys($criteria), $criteria));
+        $postQuestion = trim((string) ($options['post_question'] ?? ''));
+        $postRule = $postQuestion === '' ? '' : ' Also check each numbered post (0-based index in "posts") against this post question: "' . $postQuestion . '" '
+            . 'List only the posts that answer it yes in "event_posts" as {"index": n, "title": "event name", "date": "date/time as printed", "place": "venue or town"}; use [] when none do.';
         $system = 'You screen Instagram accounts for a human reviewer. Answer each yes/no question from the evidence only; when the evidence does not support yes, answer no. '
             . trim((string) ($options['context'] ?? ''))
-            . ' Reply with JSON only: {"answers": {"<key>": true|false, ...}, "score": 0-100 (confidence the account fits overall), "reason": "one short sentence naming the evidence"}.';
+            . $postRule
+            . ' Reply with JSON only: {"answers": {"<key>": true|false, ...},' . ($postQuestion === '' ? '' : ' "event_posts": [...],')
+            . ' "score": 0-100 (confidence the account fits overall), "reason": "one short sentence naming the evidence"}.';
         $user = "Questions:\n" . $questions . "\n\nAccount: @" . $candidate['username'] . ($candidate['full_name'] !== '' ? ' (' . $candidate['full_name'] . ')' : '')
-            . "\nEvidence:\n" . json_encode($evidence, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+            . "\nEvidence:\n" . json_encode(['posts' => array_map(
+                static fn (array $post): array => array_diff_key($post, ['image_url' => true, 'url' => true]),
+                $evidence['posts'],
+            )], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
 
         try {
-            $result = $this->ai->chat($system, $user, $this->model($options), 0.1, 600);
+            $result = $this->ai->chat($system, $user, $this->model($options), 0.1, 1000);
         } catch (\Throwable $exception) {
             return ['status' => 'unreadable', 'score' => 0, 'answers' => [], 'reason' => 'AI check failed: ' . mb_substr($exception->getMessage(), 0, 160)];
         }
@@ -240,9 +275,25 @@ class InstagramFollowAuditService
         foreach (array_keys($criteria) as $key) {
             $answers[$key] = ($json['answers'][$key] ?? false) === true;
         }
+        $eventPosts = [];
+        foreach ((array) ($json['event_posts'] ?? []) as $event) {
+            $post = $evidence['posts'][(int) ($event['index'] ?? -1)] ?? null;
+            if (is_array($event) && is_array($post) && $post['url'] !== '') {
+                $eventPosts[$post['url']] = [
+                    'url' => $post['url'],
+                    'image_url' => (string) ($post['image_url'] ?? ''),
+                    'posted_at' => (string) ($post['posted_at'] ?? ''),
+                    'title' => mb_substr(trim((string) ($event['title'] ?? '')), 0, 160),
+                    'date' => mb_substr(trim((string) ($event['date'] ?? '')), 0, 80),
+                    'place' => mb_substr(trim((string) ($event['place'] ?? '')), 0, 120),
+                ];
+            }
+        }
+        $matches = ! in_array(false, $answers, true) && (trim((string) ($options['post_question'] ?? '')) === '' || $eventPosts !== []);
 
         return [
-            'status' => ! in_array(false, $answers, true) ? 'match' : 'no_match',
+            'status' => $matches ? 'match' : 'no_match',
+            'event_posts' => array_values($eventPosts),
             'score' => max(0, min(100, (int) ($json['score'] ?? 0))),
             'answers' => $answers,
             'reason' => mb_substr(trim((string) ($json['reason'] ?? '')), 0, 300),
