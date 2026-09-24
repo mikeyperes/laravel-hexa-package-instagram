@@ -130,6 +130,73 @@ trait ReadsInstagramAccounts
     }
 
     /**
+     * Follow accounts from the logged-in session the way a person does: open each profile and click its
+     * Follow button, then read the button back. A private account shows "Requested". Accounts already
+     * followed are left as they are. Returns each account's outcome: following, requested or failed.
+     *
+     * @param array<int|string, string> $usernames usernames (keys are ignored)
+     * @return array{success: bool, message: string, detail: string, status_code: int, data: array<string, mixed>}
+     */
+    public function followAccounts(?string $profile, array $usernames): array
+    {
+        $resolved = $this->config->resolveProfile($profile);
+        $usernames = array_values(array_unique(array_filter(array_map(
+            fn ($username): string => ltrim($this->config->normalizeUsername((string) $username), '@'),
+            array_values($usernames),
+        ))));
+        if ($usernames === []) {
+            return $this->failure('At least one Instagram username is required.', 'Provide the accounts to follow.');
+        }
+        $steps = [];
+        foreach ($usernames as $index => $username) {
+            $steps[] = ['type' => 'goto', 'label' => 'open_'.$index, 'url' => 'https://www.instagram.com/'.$username.'/', 'wait_until' => 'domcontentloaded', 'timeout_ms' => 30000, 'wait_ms' => 3000 + random_int(0, 2500)];
+            $steps[] = ['type' => 'evaluate', 'label' => 'follow_'.$index, 'code' => self::followClickJs(), 'args' => ['username' => $username]];
+        }
+        $result = $this->browser->runAutomation($resolved, $steps, ['transport_timeout_ms' => 30000 + count($usernames) * 30000]);
+        if ($this->isLoginRedirect($result, [])) {
+            return $this->feedFailure($result, $resolved, '', 'Instagram follow failed.');
+        }
+
+        $accounts = [];
+        foreach ($usernames as $index => $username) {
+            $row = json_decode((string) ($this->resultByLabel($result, 'follow_'.$index)['text'] ?? ''), true);
+            $accounts[$username] = is_array($row) ? $row : ['state' => 'failed', 'message' => 'The profile page did not load.'];
+        }
+        $done = count(array_filter($accounts, static fn (array $row): bool => in_array($row['state'] ?? '', ['following', 'requested'], true)));
+
+        return [
+            'success' => $done === count($usernames),
+            'message' => $done.' of '.count($usernames).' accounts followed or requested.',
+            'detail' => 'Followed by clicking Follow in the authenticated browser profile.',
+            'status_code' => (int) ($result['status_code'] ?? 0),
+            'data' => ['profile' => $resolved, 'accounts' => $accounts],
+        ];
+    }
+
+    private static function followClickJs(): string
+    {
+        return <<<'JS'
+return (async () => {
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const label = (node) => (node?.innerText || '').trim().toLowerCase();
+  const find = () => [...document.querySelectorAll('header button, header [role="button"], main button')]
+    .find((node) => ['follow', 'follow back', 'following', 'requested'].includes(label(node)));
+  const state = (text) => text === 'requested' ? 'requested' : (text === 'following' ? 'following' : null);
+  let button = find();
+  if (!button) return { text: JSON.stringify({ state: 'failed', message: 'No Follow button on @' + args.username + '.' }) };
+  if (state(label(button))) return { text: JSON.stringify({ state: state(label(button)), already: true }) };
+  button.click();
+  for (let attempt = 0; attempt < 16; attempt += 1) {
+    await sleep(500);
+    button = find();
+    if (button && state(label(button))) return { text: JSON.stringify({ state: state(label(button)), already: false }) };
+  }
+  return { text: JSON.stringify({ state: 'failed', message: 'Instagram did not confirm the follow (button still "' + label(find()) + '").' }) };
+})();
+JS;
+    }
+
+    /**
      * Type and ids from an Instagram link: post/reel (shortcode and numeric id) or story (username and id).
      *
      * @return array{type: string, username: string, shortcode: string, pk: string}|null

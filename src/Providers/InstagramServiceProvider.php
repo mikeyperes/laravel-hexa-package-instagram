@@ -37,7 +37,7 @@ class InstagramServiceProvider extends ServiceProvider
         $this->registerDocs();
 
         if ($this->app->runningInConsole()) {
-            $this->commands([\hexa_package_instagram\Console\InstagramFollowAuditCommand::class]);
+            $this->commands([\hexa_package_instagram\Console\InstagramFollowAuditCommand::class, \hexa_package_instagram\Console\InstagramFollowCommand::class]);
         }
     }
 
