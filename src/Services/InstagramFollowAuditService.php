@@ -27,6 +27,9 @@ class InstagramFollowAuditService
      * answers it yes (for example "is this post an invitation to a dated event?"); those posts are returned
      * as `event_posts` (url, image, title, date, place) so the reviewer can see why the account was flagged.
      * `only_usernames` re-checks exactly those accounts from the network, ignoring the skip lists.
+     * `post_judge(array $candidate, array $post): ?array` lets the caller apply its own post check (for
+     * example its production event classifier) to recent posts, newest first; the first post it returns
+     * an event for flags the account, and that event is returned in `event_posts`.
      *
      * @param array{source?: string, limit?: int, posts_per_account?: int, max_following?: int, exclude_usernames?: array<int, string>, exclude_ids?: array<int, string>, only_usernames?: array<int, string>, post_question?: string, recent_days?: int, model?: string, context?: string, on_start?: callable, on_result?: callable} $options
      * @return array{success: bool, message: string, data: array<string, mixed>}
@@ -233,7 +236,11 @@ class InstagramFollowAuditService
                         continue;
                     }
                 }
-                $report($candidate + $this->judge($candidate, $evidence, $criteria, $options) + ['evidence' => $evidence]);
+                $verdict = $this->judge($candidate, $evidence, $criteria, $options);
+                if (is_callable($options['post_judge'] ?? null) && $verdict['status'] === 'match') {
+                    $verdict = $this->applyPostJudge($candidate, $evidence, $verdict, $options['post_judge']);
+                }
+                $report($candidate + $verdict + ['evidence' => $evidence]);
             }
         }
 
@@ -298,6 +305,26 @@ class InstagramFollowAuditService
             'answers' => $answers,
             'reason' => mb_substr(trim((string) ($json['reason'] ?? '')), 0, 300),
         ];
+    }
+
+    /**
+     * Run the caller's post check on recent posts, newest first, until one passes.
+     *
+     * @param array<string, mixed> $verdict
+     * @return array<string, mixed>
+     */
+    private function applyPostJudge(array $candidate, array $evidence, array $verdict, callable $judge): array
+    {
+        $posts = $evidence['posts'];
+        usort($posts, static fn (array $a, array $b): int => strcmp((string) $b['posted_at'], (string) $a['posted_at']));
+        foreach ($posts as $post) {
+            $event = $judge($candidate, $post);
+            if (is_array($event)) {
+                return ['status' => 'match', 'event_posts' => [$event], 'reason' => (string) ($event['reason'] ?? $verdict['reason'])] + $verdict;
+            }
+        }
+
+        return ['status' => 'no_match', 'event_posts' => [], 'reason' => 'No recent post passed the event check.'] + $verdict;
     }
 
     private function model(array $options): string
