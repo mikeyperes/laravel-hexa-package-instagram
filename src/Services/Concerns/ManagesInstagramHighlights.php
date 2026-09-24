@@ -36,19 +36,20 @@ trait ManagesInstagramHighlights
     }
 
     /**
-     * Add and remove stories on an existing Highlight and set its title.
+     * Add and remove stories on an existing Highlight, set its title and, optionally, its cover story.
      *
      * @param array<int, string> $addPks
      * @param array<int, string> $removePks
      * @return array{success: bool, message: string, detail: string, status_code: int, data: array<string, mixed>}
      */
-    public function editHighlight(?string $profile, string $highlightId, string $title, array $addPks, array $removePks = []): array
+    public function editHighlight(?string $profile, string $highlightId, string $title, array $addPks, array $removePks = [], string $coverPk = ''): array
     {
         return $this->runHighlightStep($profile, 'edit', [
             'highlight' => $this->highlightReelId($highlightId),
             'title' => $title,
             'add' => $this->storyPkList($addPks),
             'remove' => $this->storyPkList($removePks),
+            'cover' => ctype_digit($coverPk) ? $coverPk : '',
         ], 'Highlight updated and confirmed.');
     }
 
@@ -111,19 +112,21 @@ trait ManagesInstagramHighlights
   const readOne = async (id) => {
     const { status, json } = await getJson('/api/v1/feed/reels_media/?reel_ids=' + encodeURIComponent(id));
     const reel = json?.reels?.[id];
-    return { status, exists: !!reel, title: reel?.title || '', stories: (reel?.items || []).map((item) => String(item.pk).split('_')[0]) };
+    return { status, exists: !!reel, title: reel?.title || '', cover: String(reel?.cover_media?.media_id || '').split('_')[0],
+      stories: (reel?.items || []).map((item) => String(item.pk).split('_')[0]) };
   };
   const tray = async () => {
     const { status, json } = await getJson('/api/v1/highlights/' + owner + '/highlights_tray/');
     return { status, list: (json?.tray || []).map((item) => ({ id: item.id, title: item.title || '', count: item.media_count || 0 })) };
   };
+  const crop = [0.0, 0.21830457, 1.0, 0.78094524];
   let out = {};
   if (args.action === 'read') {
     const all = await tray();
     out = { ok: all.status === 200, status: all.status, highlights: all.list };
     if (args.highlight) Object.assign(out, { id: args.highlight }, await readOne(args.highlight));
   } else if (args.action === 'create') {
-    const cover = JSON.stringify({ media_id: args.add[0] + '_' + owner, crop_rect: JSON.stringify([0.0, 0.21830457, 1.0, 0.78094524]) });
+    const cover = JSON.stringify({ media_id: args.add[0] + '_' + owner, crop_rect: JSON.stringify(crop) });
     const made = await post('/api/v1/highlights/create_reel/', { source: 'self_profile', creation_id: String(Math.floor(Date.now() / 1000)), title: args.title, media_ids: media(args.add), cover });
     const id = made.json?.reel?.id || '';
     if (!id) return { text: JSON.stringify({ ok: false, status: made.status, error: 'Instagram did not create the Highlight.', detail: JSON.stringify(made.json || {}).slice(0, 300) }) };
@@ -132,11 +135,14 @@ trait ManagesInstagramHighlights
   } else if (args.action === 'edit') {
     const fields = { source: 'story_viewer', added_media_ids: media(args.add), removed_media_ids: media(args.remove) };
     if (args.title) fields.title = args.title;
+    if (args.cover) fields.cover = JSON.stringify({ media_id: args.cover + '_' + owner, crop_rect: JSON.stringify(crop) });
     const changed = await post('/api/v1/highlights/' + args.highlight + '/edit_reel/', fields);
     if (!changed.json?.reel) return { text: JSON.stringify({ ok: false, status: changed.status, error: 'Instagram did not update the Highlight.', detail: JSON.stringify(changed.json || {}).slice(0, 300) }) };
     const back = await readOne(args.highlight);
     const missing = (args.add || []).filter((pk) => !back.stories.includes(pk));
-    out = { ok: back.exists && missing.length === 0, status: changed.status, id: args.highlight, missing, ...back };
+    const kept = (args.remove || []).filter((pk) => back.stories.includes(pk));
+    out = { ok: back.exists && missing.length === 0 && kept.length === 0, status: changed.status, id: args.highlight, missing, kept,
+      error: missing.length || kept.length ? 'The Highlight did not change as asked.' : '', ...back };
   } else if (args.action === 'delete') {
     const gone = await post('/api/v1/highlights/' + args.highlight + '/delete_reel/', {});
     const back = await readOne(args.highlight);

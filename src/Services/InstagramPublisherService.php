@@ -141,15 +141,19 @@ class InstagramPublisherService
     }
 
     /**
-     * Keep one Highlight (the caller's key, for example "jpn-highlight:2026-09-24") named $title and
-     * holding the stories published under $storyKeys: created the first time, then only the stories it
-     * lacks are added. A Highlight with the same title already on the account (made by hand) is taken
-     * over instead of creating a second one. Outcomes: created, updated, unchanged, no_stories, failed.
+     * Keep one Highlight (the caller's key, for example "jpn-highlight:upcoming") named $title and
+     * holding the stories published under $storyKeys, one story per key (its latest). Created the first
+     * time; afterwards the stories it lacks are added and the title kept current. With $exact the
+     * Highlight holds only these stories: every other story (an item that dropped out, an older copy of
+     * an item) is removed and the first key's story becomes the cover, so the Highlight always shows
+     * exactly the current list. A Highlight with the same title already on the account (made by hand)
+     * is taken over instead of creating a second one. Outcomes: created, updated, unchanged,
+     * no_stories, failed.
      *
-     * @param array<int, string> $storyKeys
+     * @param array<int, string> $storyKeys in display order; the first one is the cover
      * @return array{success: bool, outcome: string, message: string, detail: string, data: array<string, mixed>}
      */
-    public function syncHighlight(?string $profile, string $key, string $title, array $storyKeys): array
+    public function syncHighlight(?string $profile, string $key, string $title, array $storyKeys, bool $exact = false): array
     {
         $profile = $this->profile($profile);
         $key = trim($key);
@@ -157,12 +161,13 @@ class InstagramPublisherService
         if ($key === '' || $title === '') {
             return $this->outcome(false, 'failed', 'A Highlight key and title are required.');
         }
-        // The latest posted story of each key; an expired story stays in the archive and can be highlighted.
-        $pks = InstagramPublication::query()->where('profile', $profile)->where('kind', 'story')
-            ->whereIn('source_key', array_values(array_unique(array_filter($storyKeys))))
-            ->whereIn('status', ['live', 'expired'])->orderBy('id')->get(['source_key', 'media_pk'])
-            ->groupBy('source_key')->map(fn ($rows): string => (string) $rows->last()->media_pk)
-            ->filter()->values()->all();
+        // The latest posted story of each key, in the caller's order; an expired story stays in the
+        // archive and can be highlighted.
+        $storyKeys = array_values(array_unique(array_filter(array_map('trim', $storyKeys))));
+        $latest = InstagramPublication::query()->where('profile', $profile)->where('kind', 'story')
+            ->whereIn('source_key', $storyKeys)->whereIn('status', ['live', 'expired'])->orderBy('id')
+            ->get(['source_key', 'media_pk'])->mapWithKeys(fn ($row): array => [(string) $row->source_key => (string) $row->media_pk])->all();
+        $pks = array_values(array_filter(array_map(fn (string $storyKey): string => $latest[$storyKey] ?? '', $storyKeys)));
         if ($pks === []) {
             return $this->outcome(true, 'no_stories', 'None of these items has a posted story yet; nothing to highlight.', '', ['source_key' => $key]);
         }
@@ -193,7 +198,7 @@ class InstagramPublisherService
                 }
                 $record = $this->highlightRecord($profile, $key, $title, $made['data']);
 
-                return $this->outcome(true, 'created', 'Highlight "' . $title . '" created with ' . count((array) $made['data']['stories']) . ' stories.', $made['detail'], $this->recordData($record) + ['stories' => count((array) $made['data']['stories']), 'added' => count($pks)]);
+                return $this->outcome(true, 'created', 'Highlight "' . $title . '" created with ' . count((array) $made['data']['stories']) . ' stories.', $made['detail'], $this->recordData($record) + ['stories' => count((array) $made['data']['stories']), 'added' => count($pks), 'removed' => 0]);
             }
             $current = $this->instagram->highlights($profile, (string) $same['id']);
             if (! $current['success'] || ! ($current['data']['exists'] ?? false)) {
@@ -202,22 +207,30 @@ class InstagramPublisherService
             $record = $this->highlightRecord($profile, $key, $title, $current['data']);
         }
 
-        $add = array_values(array_diff($pks, (array) ($current['data']['stories'] ?? [])));
-        if ($add === [] && trim((string) ($current['data']['title'] ?? '')) === $title) {
-            return $this->outcome(true, 'unchanged', 'Highlight "' . $title . '" already holds every story.', '', $this->recordData($record) + ['stories' => count((array) $current['data']['stories']), 'added' => 0]);
+        $have = (array) ($current['data']['stories'] ?? []);
+        $add = array_values(array_diff($pks, $have));
+        $remove = $exact ? array_values(array_diff($have, $pks)) : [];
+        $cover = $exact && (string) ($current['data']['cover'] ?? '') !== $pks[0] ? $pks[0] : '';
+        if ($add === [] && $remove === [] && $cover === '' && trim((string) ($current['data']['title'] ?? '')) === $title) {
+            return $this->outcome(true, 'unchanged', 'Highlight "' . $title . '" already holds exactly these stories.', '', $this->recordData($record) + ['stories' => count($have), 'added' => 0, 'removed' => 0]);
         }
-        $edit = $this->instagram->editHighlight($profile, (string) $record->media_pk, $title, $add);
+        $edit = $this->instagram->editHighlight($profile, (string) $record->media_pk, $title, $add, $remove, $cover);
         if (! $edit['success']) {
             return $this->outcome(false, 'failed', $edit['message'], $edit['detail'], $this->recordData($record));
         }
         $record->forceFill(['caption' => $title, 'meta' => array_merge((array) $record->meta, ['stories' => (array) $edit['data']['stories']])])->save();
 
-        return $this->outcome(true, 'updated', 'Highlight "' . $title . '": ' . count($add) . ' stories added.', $edit['detail'], $this->recordData($record) + ['stories' => count((array) $edit['data']['stories']), 'added' => count($add)]);
+        return $this->outcome(true, 'updated', 'Highlight "' . $title . '": ' . count($add) . ' added, ' . count($remove) . ' removed.', $edit['detail'], $this->recordData($record) + ['stories' => count((array) $edit['data']['stories']), 'added' => count($add), 'removed' => count($remove)]);
     }
 
     /** @param array<string, mixed> $highlight the read-back Highlight (id, url, stories) */
     private function highlightRecord(string $profile, string $key, string $title, array $highlight): InstagramPublication
     {
+        // One live record per Highlight: an older key for the same Highlight hands it over to this one.
+        InstagramPublication::query()->where('profile', $profile)->where('kind', 'highlight')->where('status', 'live')
+            ->where('media_pk', preg_replace('/^highlight:/', '', (string) $highlight['id']))->where('source_key', '!=', $key)
+            ->update(['status' => 'moved', 'updated_at' => now()]);
+
         return InstagramPublication::create([
             'profile' => $profile,
             'kind' => 'highlight',

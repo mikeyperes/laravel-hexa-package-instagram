@@ -13,7 +13,8 @@ class InstagramHighlightCommand extends Command
         {action=show : show (the account\'s Highlights), sync (create or fill one) or delete}
         {--key= : The caller\'s key for this Highlight (sync, delete)}
         {--title= : The Highlight\'s name (sync)}
-        {--story-key=* : Keys of the published stories it should hold (sync)}
+        {--story-key=* : Keys of the published stories it should hold, in order; the first is the cover with --exact (sync)}
+        {--exact : Hold only these stories: remove every other story and set the cover (sync)}
         {--profile= : Logged-in browser profile}
         {--json : Print the result as JSON}';
 
@@ -23,7 +24,7 @@ class InstagramHighlightCommand extends Command
     {
         $profile = $this->option('profile') ?: null;
         $result = match ((string) $this->argument('action')) {
-            'sync' => $publisher->syncHighlight($profile, (string) $this->option('key'), (string) $this->option('title'), (array) $this->option('story-key')),
+            'sync' => $publisher->syncHighlight($profile, (string) $this->option('key'), (string) $this->option('title'), (array) $this->option('story-key'), (bool) $this->option('exact')),
             'delete' => $this->delete($publisher, $profile, (string) $this->option('key')),
             'show' => $instagram->highlights($profile) + ['outcome' => 'read'],
             default => ['success' => false, 'outcome' => 'failed', 'message' => 'Action must be show, sync or delete.', 'detail' => '', 'data' => []],
