@@ -33,8 +33,9 @@ class InstagramUsernameExtractor
         };
         $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5);
 
-        // Full profile links: instagram.com/<name>/ (any scheme, www or m.).
-        preg_match_all('~instagram\.com/([A-Za-z0-9._]{1,30})(?=[/?"\'\s#]|$)~i', $text, $matches);
+        // Full profile links: instagram.com/<name>/ (any scheme, www or m.). Not image hosts such as
+        // cdninstagram.com/v/…, which only end in "instagram.com".
+        preg_match_all('~(?<![A-Za-z0-9-])(?:www\.|m\.)?instagram\.com/([A-Za-z0-9._]{1,30})(?=[/?"\'\s#]|$)~i', $text, $matches);
         array_map($add, $matches[1]);
         // Relative links inside Instagram's own page HTML: href="/<name>/".
         preg_match_all('~href\s*=\s*["\']/([A-Za-z0-9._]{1,30})/?["\'?#]~i', $text, $matches);

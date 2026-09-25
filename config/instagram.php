@@ -2,7 +2,7 @@
 
 return [
     'enabled' => env('INSTAGRAM_ENABLED', true),
-    'version' => '1.11.0',
+    'version' => '1.11.1',
     // Account discovery through another account's following list or stories (InstagramFollowAuditService).
     'follow_audit' => [
         'model' => env('INSTAGRAM_FOLLOW_AUDIT_MODEL', 'claude-haiku-4-5-20251001'),
