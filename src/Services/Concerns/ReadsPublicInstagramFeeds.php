@@ -248,4 +248,101 @@ return (async () => {
 })();
 JS;
     }
+
+    /**
+     * Every slide of public posts, read logged out from each post's embed (the widget Instagram serves
+     * to other websites), in the given browser profile. A carousel returns all its slides in order; a
+     * single photo or video returns one. Nothing is logged in; the profile's own route (for JPN a NordVPN
+     * server) carries the reads. `data.posts[<code>]` holds owner, caption, posted_at and `slides`
+     * (`index`, `is_video`, `image_url`: the largest rendition, a video's cover).
+     *
+     * @param array<int, string> $shortcodes Post codes (the part after /p/ or /reel/)
+     * @return array{success: bool, message: string, detail: string, status_code: int, data: array<string, mixed>}
+     */
+    public function publicPostSlides(?string $profile, array $shortcodes): array
+    {
+        $resolved = $this->config->resolveProfile($profile);
+        $codes = array_values(array_unique(array_filter(array_map(
+            static fn ($code): string => preg_replace('/[^A-Za-z0-9_-]/', '', (string) $code) ?? '',
+            $shortcodes,
+        ))));
+        if ($codes === []) {
+            return $this->failure('At least one Instagram post code is required.', 'Provide the post codes whose slides should be read.');
+        }
+
+        $result = $this->browser->runAutomation($resolved, [
+            ['type' => 'goto', 'label' => 'open_instagram', 'url' => 'https://www.instagram.com/', 'wait_until' => 'domcontentloaded', 'timeout_ms' => 30000, 'wait_ms' => random_int(2000, 4000)],
+            ['type' => 'evaluate', 'label' => 'read_post_slides', 'code' => self::publicPostSlidesJs(), 'args' => ['codes' => $codes, 'min_gap_ms' => 1500, 'max_gap_ms' => 4000]],
+        ], [
+            'transport_timeout_ms' => 45000 + count($codes) * 25000,
+            'public_read_only' => true,
+        ]);
+
+        $read = json_decode((string) ($this->resultByLabel($result, 'read_post_slides')['text'] ?? ''), true);
+        if (! is_array($read)) {
+            return [
+                'success' => false,
+                'message' => 'Instagram public read failed.',
+                'detail' => (string) ($result['message'] ?? 'The browser returned no data.'),
+                'status_code' => (int) ($result['status_code'] ?? 0),
+                'data' => ['profile' => $resolved, 'posts' => [], 'blocked' => true],
+            ];
+        }
+        $posts = [];
+        foreach ((array) ($read['posts'] ?? []) as $post) {
+            if (is_array($post) && ($post['code'] ?? '') !== '') {
+                $posts[(string) $post['code']] = $post;
+            }
+        }
+        $read_ok = count(array_filter($posts, static fn (array $post): bool => ! empty($post['ok'])));
+
+        return [
+            'success' => $read_ok > 0 && empty($read['blocked']),
+            'message' => $read_ok.' of '.count($codes).' posts read logged out.',
+            'detail' => 'Read from each post\'s public embed in the logged-out browser profile '.$resolved.'.',
+            'status_code' => 200,
+            'data' => ['profile' => $resolved, 'posts' => $posts, 'blocked' => ! empty($read['blocked']), 'blocked_status' => (int) ($read['blocked_status'] ?? 0)],
+        ];
+    }
+
+    public static function publicPostSlidesJs(): string
+    {
+        return <<<'JS'
+return (async () => {
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const largest = (resources) => (resources || []).slice().sort((a, b) => (b.config_width || 0) - (a.config_width || 0))[0]?.src || '';
+  const posts = [];
+  let blocked = false, blockedStatus = 0;
+  for (const [n, code] of (args.codes || []).entries()) {
+    if (n > 0) await sleep(args.min_gap_ms + Math.random() * (args.max_gap_ms - args.min_gap_ms));
+    let status = 0;
+    try {
+      const response = await fetch('/p/' + encodeURIComponent(code) + '/embed/captioned/', { credentials: 'include' });
+      status = response.status;
+      if ([401, 403, 429].includes(status) || status >= 500 || /\/accounts\/login/.test(response.url)) {
+        blocked = true; blockedStatus = status; break;
+      }
+      const html = response.ok ? await response.text() : '';
+      const match = html.match(/"contextJSON":("(?:[^"\\]|\\.)*")/);
+      const context = match ? JSON.parse(JSON.parse(match[1])) : {};
+      const media = context.gql_data?.shortcode_media || context.context?.media || null;
+      if (!media) { posts.push({ code, ok: false, status, error: 'Instagram returned the post embed without its media.' }); continue; }
+      const edges = media.edge_sidecar_to_children?.edges || [];
+      const nodes = edges.length ? edges.map((edge) => edge?.node || {}) : [media];
+      posts.push({
+        code, ok: true, status,
+        owner: media.owner?.username || '',
+        caption: media.edge_media_to_caption?.edges?.[0]?.node?.text || '',
+        posted_at: media.taken_at_timestamp ? new Date(media.taken_at_timestamp * 1000).toISOString() : '',
+        is_carousel: edges.length > 1,
+        slides: nodes.map((node, index) => ({ index: index + 1, is_video: !!node.is_video, image_url: largest(node.display_resources) || node.display_url || '' })),
+      });
+    } catch (error) {
+      posts.push({ code, ok: false, status, error: String(error).slice(0, 200) });
+    }
+  }
+  return { text: JSON.stringify({ posts, blocked, blocked_status: blockedStatus }) };
+})();
+JS;
+    }
 }
