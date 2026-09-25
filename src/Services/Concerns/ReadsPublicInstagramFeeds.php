@@ -7,7 +7,9 @@ namespace hexa_package_instagram\Services\Concerns;
  * account's public profile embed (the widget Instagram serves to other websites), which carries the
  * account's six newest posts with caption, date and full-size image. No login and no private web
  * queries; the read stops at the first refusal so the caller can change route and clear the session
- * before trying the remaining accounts again.
+ * before trying the remaining accounts again. Instagram's "profile may be broken or removed" page, an
+ * empty page and a timeout are uncertain, not proof the account is gone: the account is tried once more
+ * at the end of the batch, and soft_limit uncertain accounts in a row count as a refusal.
  */
 trait ReadsPublicInstagramFeeds
 {
@@ -17,10 +19,13 @@ trait ReadsPublicInstagramFeeds
      * Accounts come back in profileFeeds()'s shape (`post_links`, `posts` keyed by shortcode in
      * postScan()'s `data.scan` shape). Carousels carry their first image only and videos their cover
      * (marked as video). `data.blocked` is true when Instagram refused the reader; the accounts after
-     * that point are not read.
+     * that point are not read. A refusal of soft_limit uncertain accounts in a row leaves those accounts
+     * unread too (listed in `data.blocked_uncertain`) so they are read again on the new route; accounts in
+     * `settled` already had that second chance and are returned as unreadable instead.
+     * Unreadable accounts carry `uncertain` = true unless Instagram answered 404.
      *
      * @param array<int, string> $usernames
-     * @param array{min_gap_ms?: int, max_gap_ms?: int, fresh?: bool} $options fresh: forget Instagram's cookies and storage first
+     * @param array{min_gap_ms?: int, max_gap_ms?: int, fresh?: bool, soft_limit?: int, settled?: array<int, string>, fetch_timeout_ms?: int} $options fresh: forget Instagram's cookies and storage first
      * @return array{success: bool, message: string, detail: string, status_code: int, data: array<string, mixed>}
      */
     public function publicProfileFeeds(?string $profile, array $usernames, int $limit = 6, array $options = []): array
@@ -47,11 +52,20 @@ trait ReadsPublicInstagramFeeds
             'type' => 'evaluate',
             'label' => 'read_public_feeds',
             'code' => self::publicProfileFeedJs(),
-            'args' => ['usernames' => $usernames, 'limit' => $limit, 'min_gap_ms' => $minGap, 'max_gap_ms' => $maxGap],
+            'args' => [
+                'usernames' => $usernames,
+                'limit' => $limit,
+                'min_gap_ms' => $minGap,
+                'max_gap_ms' => $maxGap,
+                'soft_limit' => max(0, (int) ($options['soft_limit'] ?? 2)),
+                'settled' => array_values(array_map('strtolower', (array) ($options['settled'] ?? []))),
+                'fetch_timeout_ms' => max(5000, (int) ($options['fetch_timeout_ms'] ?? 20000)),
+            ],
         ];
 
         $result = $this->browser->runAutomation($resolved, $steps, [
-            'transport_timeout_ms' => 45000 + (count($usernames) * ($maxGap + 8000)),
+            // Room for one retry of every account (fetch timeout plus gap) on top of the normal read.
+            'transport_timeout_ms' => 45000 + (count($usernames) * 2 * ($maxGap + 8000)),
             'public_read_only' => true,
         ]);
 
@@ -86,6 +100,7 @@ trait ReadsPublicInstagramFeeds
                 'user_id' => (string) ($account['user_id'] ?? ''),
                 'status' => (int) ($account['status'] ?? 0),
                 'message' => $ok ? 'Recent public posts read.' : (string) ($account['error'] ?? 'Recent posts could not be read.'),
+                'uncertain' => ! $ok && (bool) ($account['uncertain'] ?? false),
                 'elapsed_ms' => (int) ($account['ms'] ?? 0),
                 'post_links' => array_values(array_map(static fn (array $scan): string => (string) $scan['url'], $posts)),
                 'posts' => $posts,
@@ -109,7 +124,9 @@ trait ReadsPublicInstagramFeeds
         return [
             'success' => $read > 0,
             'message' => $read.' of '.count($usernames).' Instagram accounts read logged out.'
-                .($blocked ? ' Instagram refused the reader at @'.$feed['blocked']['username'].' (HTTP '.(int) $feed['blocked']['status'].').' : ''),
+                .($blocked ? (! empty($feed['blocked']['uncertain']) && (int) $feed['blocked']['status'] < 400
+                    ? ' Instagram gave no profile for '.count((array) $feed['blocked']['uncertain']).' accounts in a row from @'.$feed['blocked']['username'].'; treated as a refusal.'
+                    : ' Instagram refused the reader at @'.$feed['blocked']['username'].' (HTTP '.(int) $feed['blocked']['status'].').') : ''),
             'detail' => 'Read from each account\'s public profile embed in the logged-out browser profile '.$resolved.'.',
             'status_code' => (int) ($result['status_code'] ?? 0),
             'data' => [
@@ -118,6 +135,7 @@ trait ReadsPublicInstagramFeeds
                 'blocked' => $blocked,
                 'blocked_at' => $blocked ? (string) $feed['blocked']['username'] : '',
                 'blocked_status' => $blocked ? (int) $feed['blocked']['status'] : 0,
+                'blocked_uncertain' => $blocked ? array_values((array) ($feed['blocked']['uncertain'] ?? [])) : [],
             ],
         ];
     }
@@ -128,29 +146,29 @@ trait ReadsPublicInstagramFeeds
 return (async () => {
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const largest = (resources) => (resources || []).slice().sort((a, b) => (b.config_width || 0) - (a.config_width || 0))[0]?.src || '';
-  const accounts = [];
-  let blocked = null;
-  for (let index = 0; index < args.usernames.length; index += 1) {
-    const username = args.usernames[index];
-    if (index > 0) await sleep(args.min_gap_ms + Math.random() * (args.max_gap_ms - args.min_gap_ms));
+  const settled = new Set(args.settled || []);
+  const gap = () => sleep(args.min_gap_ms + Math.random() * (args.max_gap_ms - args.min_gap_ms));
+  // One account: { ok, ... } when read, { refused } when Instagram refuses the reader, or { uncertain } when
+  // Instagram gave no profile (its "may be broken" page, an empty page, a timeout): not proof the account is gone.
+  const read = async (username) => {
     const started = Date.now();
     let status = 0;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), args.fetch_timeout_ms);
     try {
-      const response = await fetch('/' + encodeURIComponent(username) + '/embed/', { credentials: 'include' });
+      const response = await fetch('/' + encodeURIComponent(username) + '/embed/', { credentials: 'include', signal: controller.signal });
       status = response.status;
       const html = response.ok ? await response.text() : '';
       const match = html.match(/"contextJSON":("(?:[^"\\]|\\.)*")/);
       if ([401, 403, 429].includes(status) || status >= 500 || /\/accounts\/login/.test(response.url)) {
-        // Instagram is refusing this reader: stop so the caller can change route and clear the session.
-        blocked = { username, status };
-        break;
+        return { refused: true, status };
       }
       if (!match) {
-        accounts.push({ username, ok: false, status, ms: Date.now() - started,
-          error: status === 404 ? 'Instagram account not found.' : (/may be broken|may have been removed/i.test(html)
-            ? 'Instagram says: "The link to this profile may be broken, or the profile may have been removed." (private, renamed or deleted account)'
-            : 'Instagram returned the page without any posts.') });
-        continue;
+        if (status === 404) return { username, ok: false, status, ms: Date.now() - started, error: 'Instagram account not found (HTTP 404).' };
+        return { username, ok: false, uncertain: true, status, ms: Date.now() - started,
+          error: /may be broken|may have been removed/i.test(html)
+            ? 'Instagram showed the logged-out reader its "profile may be broken or removed" page; often a temporary refusal, not proof the account is gone.'
+            : 'Instagram returned the page without any posts.' };
       }
       const context = JSON.parse(JSON.parse(match[1])).context || {};
       const owner = String(context.username || username).toLowerCase();
@@ -179,10 +197,52 @@ return (async () => {
             location: media.location?.name || '',
           };
         });
-      accounts.push({ username, ok: true, status, ms: Date.now() - started, user_id: String(context.owner_id || ''), posts });
+      return { username, ok: true, status, ms: Date.now() - started, user_id: String(context.owner_id || ''), posts };
     } catch (error) {
-      accounts.push({ username, ok: false, status, ms: Date.now() - started, error: String(error).slice(0, 200) });
+      const timedOut = error?.name === 'AbortError';
+      return { username, ok: false, uncertain: true, status, ms: Date.now() - started,
+        error: timedOut ? 'Instagram did not answer within ' + Math.round(args.fetch_timeout_ms / 1000) + ' seconds.' : String(error).slice(0, 200) };
+    } finally {
+      clearTimeout(timer);
     }
+  };
+  const accounts = [];
+  const retry = [];
+  let streak = [];
+  let blocked = null;
+  for (let index = 0; index < args.usernames.length && !blocked; index += 1) {
+    const username = args.usernames[index];
+    if (index > 0) await gap();
+    const result = await read(username);
+    if (result.refused) {
+      blocked = { username, status: result.status };
+    } else if (result.uncertain && !settled.has(username.toLowerCase())) {
+      streak.push(result);
+      if (args.soft_limit > 0 && streak.length >= args.soft_limit) {
+        // Several accounts in a row without a profile: the route is being refused. Leave them unread.
+        blocked = { username: streak[0].username, status: result.status, uncertain: streak.map((item) => item.username) };
+      }
+    } else {
+      retry.push(...streak);
+      streak = [];
+      accounts.push(result.uncertain ? { ...result, error: 'Instagram does not show this profile to a logged-out reader, on a second NordVPN server too (embedding may be turned off, or the account is age-restricted); it needs a logged-in read. Last answer: ' + result.error } : result);
+    }
+  }
+  if (!blocked) retry.push(...streak);
+  // Uncertain accounts get a second try at the end of the batch, after a longer wait.
+  for (const first of blocked ? [] : retry) {
+    await sleep(5000 + Math.random() * 5000);
+    const result = await read(first.username);
+    if (result.refused) {
+      blocked = { username: first.username, status: result.status };
+      break;
+    }
+    accounts.push(result.ok || !result.uncertain ? result : { ...result, error: result.error + ' Same answer when tried again.' });
+  }
+  if (blocked) {
+    // Accounts still waiting for their second try are read again on the next route, with the refused ones.
+    const waiting = retry.map((item) => item.username).filter((name) => !accounts.some((done) => done.username === name));
+    blocked.uncertain = [...new Set([...(blocked.uncertain || []), ...waiting])];
   }
   return { text: JSON.stringify({ accounts, blocked }) };
 })();
