@@ -216,9 +216,12 @@ class InstagramFollowAuditService
         foreach (array_chunk($candidates, (int) config('instagram.follow_audit.batch_size', 8)) as $batch) {
             $names = array_column($batch, 'username');
             // feed_reader lets the caller read posts its own way (for example logged out); default: this session.
-            $feeds = is_callable($options['feed_reader'] ?? null)
-                ? (($options['feed_reader'])($names, $postsPer)['data']['accounts'] ?? [])
-                : ($this->instagram->profileFeeds($profile, $names, $postsPer)['data']['accounts'] ?? []);
+            $read = is_callable($options['feed_reader'] ?? null)
+                ? ($options['feed_reader'])($names, $postsPer)
+                : $this->instagram->profileFeeds($profile, $names, $postsPer);
+            $feeds = (array) ($read['data']['accounts'] ?? []);
+            // An account the reader never reached carries the reader's own reason (refused, stopped).
+            $unread = 'Not read: '.((string) ($read['message'] ?? '') ?: 'the reader returned nothing for this account.');
             foreach ($batch as $candidate) {
                 $name = $candidate['username'];
                 $feed = (array) ($feeds[$name] ?? []);
@@ -227,7 +230,7 @@ class InstagramFollowAuditService
                         'status' => $candidate['is_private'] ? 'private' : 'unreadable',
                         'score' => 0,
                         'answers' => [],
-                        'reason' => $candidate['is_private'] ? 'Private account; its posts are not visible to this session.' : (string) ($feed['message'] ?? 'Not readable.'),
+                        'reason' => $candidate['is_private'] ? 'Private account; its posts are not visible to this session.' : (string) ($feed['message'] ?? $unread),
                     ]);
                     continue;
                 }
