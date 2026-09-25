@@ -32,7 +32,9 @@ class InstagramFollowAuditService
      * example its production event classifier) to recent posts, newest first; the first post it returns
      * an event for flags the account, and that event is returned in `event_posts`.
      *
-     * @param array{source?: string, limit?: int, posts_per_account?: int, max_following?: int, exclude_usernames?: array<int, string>, exclude_ids?: array<int, string>, only_usernames?: array<int, string>, post_question?: string, recent_days?: int, model?: string, context?: string, on_start?: callable, on_result?: callable} $options
+     * source: following (default), stories, or list (the caller's usernames; $account names where they came from).
+     * feed_reader: fn(array $usernames, int $posts): array in profileFeeds() shape, to read posts another way.
+     * @param array{source?: string, usernames?: array<int, string>, feed_reader?: callable, limit?: int, posts_per_account?: int, max_following?: int, exclude_usernames?: array<int, string>, exclude_ids?: array<int, string>, only_usernames?: array<int, string>, post_question?: string, recent_days?: int, model?: string, context?: string, on_start?: callable, on_result?: callable} $options
      * @return array{success: bool, message: string, data: array<string, mixed>}
      */
     public function audit(?string $profile, string $account, array $criteria, array $options = []): array
@@ -42,12 +44,15 @@ class InstagramFollowAuditService
         if ($account === '' || $criteria === []) {
             return ['success' => false, 'message' => 'An account and at least one criterion are required.', 'data' => []];
         }
-        $source = ($options['source'] ?? 'following') === 'stories' ? 'stories' : 'following';
+        $source = in_array($options['source'] ?? 'following', ['stories', 'list'], true) ? $options['source'] : 'following';
         $limit = max(1, min((int) ($options['limit'] ?? config('instagram.follow_audit.limit', 60)), 300));
 
-        $found = $source === 'stories'
-            ? $this->storyCandidates($profile, $account)
-            : $this->followingCandidates($profile, $account, (int) ($options['max_following'] ?? 500));
+        $found = match ($source) {
+            'stories' => $this->storyCandidates($profile, $account),
+            // A list supplied by the caller (for example usernames pulled from a pasted dump); $account names its origin.
+            'list' => $this->listCandidates((array) ($options['usernames'] ?? []), $account),
+            default => $this->followingCandidates($profile, $account, (int) ($options['max_following'] ?? 500)),
+        };
         if (! $found['success']) {
             return ['success' => false, 'message' => $found['message'], 'data' => ['account' => $account, 'source' => $source]];
         }
@@ -114,6 +119,19 @@ class InstagramFollowAuditService
                 'model' => $this->model($options),
             ],
         ];
+    }
+
+    /** @return array{success: bool, message: string, candidates: array<int, array<string, mixed>>} */
+    private function listCandidates(array $usernames, string $origin): array
+    {
+        $names = array_values(array_unique(array_filter(array_map(static fn ($name): string => strtolower(ltrim(trim((string) $name), '@')), $usernames))));
+        if ($names === []) {
+            return ['success' => false, 'message' => 'The list has no usernames.', 'candidates' => []];
+        }
+
+        return ['success' => true, 'message' => count($names) . ' accounts in the list.', 'candidates' => array_map(static fn (string $name): array => [
+            'username' => $name, 'full_name' => '', 'user_id' => '', 'is_private' => false, 'found_via' => [$origin],
+        ], $names)];
     }
 
     /** @return array{success: bool, message: string, candidates: array<int, array<string, mixed>>} */
@@ -197,7 +215,10 @@ class InstagramFollowAuditService
         };
         foreach (array_chunk($candidates, (int) config('instagram.follow_audit.batch_size', 8)) as $batch) {
             $names = array_column($batch, 'username');
-            $feeds = $this->instagram->profileFeeds($profile, $names, $postsPer)['data']['accounts'] ?? [];
+            // feed_reader lets the caller read posts its own way (for example logged out); default: this session.
+            $feeds = is_callable($options['feed_reader'] ?? null)
+                ? (($options['feed_reader'])($names, $postsPer)['data']['accounts'] ?? [])
+                : ($this->instagram->profileFeeds($profile, $names, $postsPer)['data']['accounts'] ?? []);
             foreach ($batch as $candidate) {
                 $name = $candidate['username'];
                 $feed = (array) ($feeds[$name] ?? []);
