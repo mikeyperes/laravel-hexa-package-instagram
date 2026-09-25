@@ -147,7 +147,9 @@ return (async () => {
       }
       if (!match) {
         accounts.push({ username, ok: false, status, ms: Date.now() - started,
-          error: status === 404 ? 'Instagram account not found.' : 'No public posts (private or unavailable account).' });
+          error: status === 404 ? 'Instagram account not found.' : (/may be broken|may have been removed/i.test(html)
+            ? 'Instagram says: "The link to this profile may be broken, or the profile may have been removed." (private, renamed or deleted account)'
+            : 'Instagram returned the page without any posts.') });
         continue;
       }
       const context = JSON.parse(JSON.parse(match[1])).context || {};
