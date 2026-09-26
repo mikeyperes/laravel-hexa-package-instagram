@@ -2,10 +2,12 @@
 
 return [
     'enabled' => env('INSTAGRAM_ENABLED', true),
-    'version' => '1.13.0',
+    'version' => '1.14.0',
     // Account discovery through another account's following list or stories (InstagramFollowAuditService).
     'follow_audit' => [
         'model' => env('INSTAGRAM_FOLLOW_AUDIT_MODEL', 'claude-haiku-4-5-20251001'),
+        // chat: the account checks are questions the chat answers over OAuth (anthropic:chat-requests); api: the paid API.
+        'answer_by' => env('INSTAGRAM_FOLLOW_AUDIT_ANSWER_BY', 'chat'),
         'limit' => 60,
         'batch_size' => 8,
         'max_highlights' => 15,

@@ -116,6 +116,8 @@ class InstagramFollowAuditService
                 'unreadable' => array_values(array_filter($screened, static fn (array $row): bool => $row['status'] === 'unreadable')),
                 'inactive' => array_values(array_filter($screened, static fn (array $row): bool => $row['status'] === 'inactive')),
                 'private' => array_values(array_filter($screened, static fn (array $row): bool => $row['status'] === 'private')),
+                // Checks the chat has not answered yet (answer_by chat); these accounts are checked again later.
+                'awaiting' => array_values(array_filter($screened, static fn (array $row): bool => $row['status'] === 'awaiting')),
                 'model' => $this->model($options),
             ],
         ];
@@ -305,6 +307,9 @@ class InstagramFollowAuditService
         } catch (\Throwable $exception) {
             return ['status' => 'unreadable', 'score' => 0, 'answers' => [], 'reason' => 'AI check failed: ' . mb_substr($exception->getMessage(), 0, 160)];
         }
+        if (! empty($result['awaiting_chat_answer'])) {
+            return ['status' => 'awaiting', 'score' => 0, 'answers' => [], 'reason' => (string) ($result['message'] ?? 'Waiting for the chat to answer.')];
+        }
         $content = (string) ($result['data']['content'] ?? $result['content'] ?? '');
         $json = preg_match('/\{[\s\S]*\}/', $content, $match) ? json_decode($match[0], true) : null;
         if (! ($result['success'] ?? false) || ! is_array($json)) {
@@ -351,6 +356,10 @@ class InstagramFollowAuditService
         usort($posts, static fn (array $a, array $b): int => strcmp((string) $b['posted_at'], (string) $a['posted_at']));
         foreach ($posts as $post) {
             $event = $judge($candidate, $post);
+            if (is_array($event) && ! empty($event['awaiting'])) {
+                // The caller's check is waiting for the chat; the account is decided on a later run.
+                return ['status' => 'awaiting', 'event_posts' => [], 'reason' => (string) ($event['reason'] ?? 'Waiting for the chat to answer.')] + $verdict;
+            }
             if (is_array($event)) {
                 return ['status' => 'match', 'event_posts' => [$event], 'reason' => (string) ($event['reason'] ?? $verdict['reason'])] + $verdict;
             }

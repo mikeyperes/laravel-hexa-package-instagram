@@ -34,6 +34,9 @@ class InstagramServiceProvider extends ServiceProvider
         $this->loadRoutesFrom(__DIR__.'/../../routes/instagram.php');
         $this->loadViewsFrom(__DIR__.'/../../resources/views', 'instagram');
         $this->loadMigrationsFrom(__DIR__.'/../../database/migrations');
+        if (config('instagram.follow_audit.answer_by', 'chat') === 'chat' && class_exists(\hexa_package_anthropic\Services\AnthropicChatAnswers::class)) {
+            \hexa_package_anthropic\Services\AnthropicChatAnswers::answerByChat('hexa_package_instagram\\');
+        }
 
         $this->registerWithPackageRegistry();
         $this->registerDocs();
