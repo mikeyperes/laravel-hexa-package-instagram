@@ -13,6 +13,20 @@ namespace hexa_package_instagram\Services\Concerns;
  */
 trait ReadsPublicInstagramFeeds
 {
+    /** The Browser Worker refused the run itself (HTTP 409: runtime down or profile busy); Instagram was never asked. */
+    private function browserRefusedRun(array $result): bool
+    {
+        return (int) ($result['status_code'] ?? 0) === 409;
+    }
+
+    /** The Worker's own reason when it gave one, else its summary message. */
+    private function browserFailureDetail(array $result): string
+    {
+        $detail = trim((string) ($result['detail'] ?? ''));
+
+        return $detail !== '' ? $detail : (string) ($result['message'] ?? 'The browser returned no data.');
+    }
+
     /**
      * Newest public posts for several accounts, read logged out in one browser session.
      *
@@ -71,13 +85,17 @@ trait ReadsPublicInstagramFeeds
 
         $feed = json_decode((string) ($this->resultByLabel($result, 'read_public_feeds')['text'] ?? ''), true);
         if (! is_array($feed)) {
-            // Instagram's own page did not load: treat it as a refusal of this route.
+            // Instagram's own page did not load: treat it as a refusal of this route, unless the Browser Worker refused
+            // the run itself. CRITICAL — see BUGLOG.md IG-2026-09-30-01: a Worker 409 (runtime down, profile busy) is a
+            // browser failure; calling it "blocked" made callers rotate NordVPN servers and wait forever.
+            $browserFailed = $this->browserRefusedRun($result);
+
             return [
                 'success' => false,
-                'message' => 'Instagram public read failed.',
-                'detail' => (string) ($result['message'] ?? 'The browser returned no data.'),
+                'message' => $browserFailed ? 'The browser session could not run the public read.' : 'Instagram public read failed.',
+                'detail' => $this->browserFailureDetail($result),
                 'status_code' => (int) ($result['status_code'] ?? 0),
-                'data' => ['profile' => $resolved, 'accounts' => [], 'blocked' => true, 'blocked_at' => $usernames[0], 'blocked_status' => 0],
+                'data' => ['profile' => $resolved, 'accounts' => [], 'blocked' => ! $browserFailed, 'browser_failed' => $browserFailed, 'blocked_at' => $usernames[0], 'blocked_status' => 0],
             ];
         }
 
@@ -280,12 +298,14 @@ JS;
 
         $read = json_decode((string) ($this->resultByLabel($result, 'read_post_slides')['text'] ?? ''), true);
         if (! is_array($read)) {
+            $browserFailed = $this->browserRefusedRun($result);
+
             return [
                 'success' => false,
-                'message' => 'Instagram public read failed.',
-                'detail' => (string) ($result['message'] ?? 'The browser returned no data.'),
+                'message' => $browserFailed ? 'The browser session could not run the public read.' : 'Instagram public read failed.',
+                'detail' => $this->browserFailureDetail($result),
                 'status_code' => (int) ($result['status_code'] ?? 0),
-                'data' => ['profile' => $resolved, 'posts' => [], 'blocked' => true],
+                'data' => ['profile' => $resolved, 'posts' => [], 'blocked' => ! $browserFailed, 'browser_failed' => $browserFailed],
             ];
         }
         $posts = [];

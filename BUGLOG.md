@@ -1,5 +1,16 @@
 # Instagram package bug log
 
+## IG-2026-09-30-01 — A Browser Worker failure was reported as Instagram refusing the reader
+
+- **Symptom:** `publicProfileFeeds()` and the slide reader returned `blocked: true` with the detail
+  "Browser profile ownership conflict." when the Browser Worker refused the run (HTTP 409).
+- **Impact:** callers took it for an Instagram refusal: the JPN reader changed NordVPN servers and waited 10, 20
+  and 30 minutes in a loop, and the Worker's real reason (runtime not activated) was dropped.
+- **Root cause:** any run that returned no page data was treated as "Instagram's page did not load", and only the
+  Worker's summary message was kept.
+- **Fix:** a Worker 409 is `browser_failed: true`, `blocked: false`, with the Worker's own `detail`.
+- **Guard:** `CRITICAL — see BUGLOG.md IG-2026-09-30-01` in `ReadsPublicInstagramFeeds`.
+
 ## IG-2026-09-24-01 — Every story after the first failed once the account had a live story
 
 - **Audit:** JPN story run to @miamijpn (#2067 and #2124 after #2109 posted).
