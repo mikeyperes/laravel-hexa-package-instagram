@@ -140,6 +140,9 @@ trait ReadsInstagramAccounts
     public function followAccounts(?string $profile, array $usernames): array
     {
         $resolved = $this->config->resolveProfile($profile);
+        if ($refused = $this->readOnlyRefusal($resolved)) {
+            return $refused;
+        }
         $usernames = array_values(array_unique(array_filter(array_map(
             fn ($username): string => ltrim($this->config->normalizeUsername((string) $username), '@'),
             array_values($usernames),
@@ -280,7 +283,8 @@ JS;
       mentions: (node.reel_mentions || []).map((mention) => mention.user?.username).filter(Boolean),
       links: (node.story_link_stickers || []).map(stickerUrl).filter(Boolean),
       hashtags: (node.story_hashtags || []).map((tag) => tag.hashtag?.name).filter(Boolean),
-      reshared_post: shared ? { pk: String(shared.media_id || '').split('_')[0], code: shared.media_code || '', owner: shared.media?.user?.username || shared.product_type || '' } : null,
+      // CRITICAL — see BUGLOG.md IG-2026-09-30-02: the owner is a username or '', never the sticker's product_type.
+      reshared_post: shared ? { pk: String(shared.media_id || '').split('_')[0], code: shared.media_code || '', owner: shared.media?.user?.username || shared.user?.username || '', owner_id: String(shared.media?.user?.pk || shared.user?.pk || '') } : null,
     };
   };
 JS;

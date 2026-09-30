@@ -2,7 +2,7 @@
 
 return [
     'enabled' => env('INSTAGRAM_ENABLED', true),
-    'version' => '1.14.1',
+    'version' => '1.15.0',
     // Account discovery through another account's following list or stories (InstagramFollowAuditService).
     'follow_audit' => [
         'model' => env('INSTAGRAM_FOLLOW_AUDIT_MODEL', 'claude-haiku-4-5-20251001'),
@@ -12,6 +12,11 @@ return [
         'batch_size' => 8,
         'max_highlights' => 15,
     ],
+    // storyFeeds(): most shared posts per call whose owner is looked up when the story's share sticker does not name it.
+    'story_reshare_owner_lookups' => 10,
+    // Browser profiles that may only read Instagram (scout accounts): follow, post, edit, delete and Highlight
+    // changes are refused (423). Other packages may add their reader profiles here at boot.
+    'read_only_profiles' => array_values(array_filter(array_map('trim', explode(',', (string) env('INSTAGRAM_READ_ONLY_PROFILES', ''))))),
     // Server-side Instagram page and image requests leave through this browser profile's route
     // (for example its NordVPN route) instead of the server IP. Empty keeps the direct connection.
     'http_route_profile' => env('INSTAGRAM_HTTP_ROUTE_PROFILE', ''),

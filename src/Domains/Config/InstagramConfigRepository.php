@@ -197,6 +197,22 @@ class InstagramConfigRepository
         return $this->normalizeProfile((string) (Setting::getValue(self::KEY_SESSION_PROFILE) ?: $this->defaultProfile()));
     }
 
+    /**
+     * Browser profiles that may only read Instagram (for example a scout account): they never follow,
+     * post, edit, delete or change Highlights. Listed in instagram.read_only_profiles.
+     */
+    public function isReadOnlyProfile(string $profile): bool
+    {
+        $profile = strtolower(trim($profile));
+        foreach ((array) config('instagram.read_only_profiles', []) as $listed) {
+            if ($profile !== '' && strtolower(trim((string) $listed)) === $profile) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public function normalizeProfile(string $profile): string
     {
         $profile = strtolower(trim($profile));

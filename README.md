@@ -33,6 +33,10 @@ per request: each story's own link (`/stories/<user>/<id>/`), full-size image or
 expiry times, and the accounts, links and hashtags on it. Stories expire after 24 hours and their
 media links sooner, so download what you keep right away.
 
+A story that shares a post carries `reshared_post` (`pk`, `code`, `url`, `owner`, `owner_id`); when the share
+sticker does not name the owner it is looked up from the post, slowly, up to
+`instagram.story_reshare_owner_lookups` (10) posts per call, or per call's `owner_lookups` option.
+
 `followingFeed($profile, $username, $max)` lists the accounts one account follows (username, name,
 id, private/verified), 50 per page.
 
@@ -56,6 +60,13 @@ php artisan instagram:edit <publication id> --caption="..."            # replace
 `publish(..., updateCaption: true)` edits a live post's caption instead of skipping it when the caption changed.
 
 Browser steps used: `emulate_mobile` and `choose_file` (Browser Worker 1.12.18+). Staged images go to `browser-worker.profile_provisioning.upload_base_path` and are deleted after each run.
+
+## Read-only profiles
+
+Profiles listed in `instagram.read_only_profiles` (env `INSTAGRAM_READ_ONLY_PROFILES`, comma-separated; other
+packages may add theirs at boot, as JPN does for its scout reader) may only read. Follow, story and post
+publishing, caption edits, deletes and Highlight changes return `success: false` with status 423 and never
+reach the browser.
 
 ## Package ownership
 

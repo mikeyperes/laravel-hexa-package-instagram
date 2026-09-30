@@ -181,22 +181,27 @@ trait ReadsInstagramFeeds
      * Each story has its own link (`/stories/<user>/<id>/`), its full-size image or video, when it
      * was posted and expires, and the accounts, links and hashtags on it. Stories disappear after
      * 24 hours and their media links expire, so callers download what they keep right away.
+     * A story that shares a post has `reshared_post` {pk, code, url, owner, owner_id}; the owner is
+     * looked up (paced) when the share sticker does not name it, up to `owner_lookups` posts per call
+     * (config instagram.story_reshare_owner_lookups); an owner not found stays ''.
      *
      * @param array<string, string> $userIds numeric account id => username
+     * @param array{owner_lookups?: int} $options
      * @return array{success: bool, message: string, detail: string, status_code: int, data: array<string, mixed>}
      */
-    public function storyFeeds(?string $profile, array $userIds): array
+    public function storyFeeds(?string $profile, array $userIds, array $options = []): array
     {
         $resolved = $this->config->resolveProfile($profile);
         $ids = array_values(array_filter(array_map('strval', array_keys($userIds)), 'ctype_digit'));
         if ($ids === []) {
             return $this->failure('At least one numeric Instagram account id is required.', 'profileFeeds() returns each account\'s id as user_id.');
         }
+        $ownerLookups = max(0, min(50, (int) ($options['owner_lookups'] ?? config('instagram.story_reshare_owner_lookups', 10))));
 
         $result = $this->browser->runAutomation($resolved, [
             ['type' => 'goto', 'label' => 'open_home', 'url' => 'https://www.instagram.com/', 'wait_until' => 'domcontentloaded', 'timeout_ms' => 30000, 'wait_ms' => 2000],
-            ['type' => 'evaluate', 'label' => 'read_stories', 'code' => self::restJs(self::storyFeedJs()), 'args' => ['ids' => $ids, 'chunk' => 20, 'min_gap_ms' => 1200, 'max_gap_ms' => 2800]],
-        ], ['transport_timeout_ms' => 60000 + (int) ceil(count($ids) / 20) * 10000]);
+            ['type' => 'evaluate', 'label' => 'read_stories', 'code' => self::restJs(self::storyFeedJs()), 'args' => ['ids' => $ids, 'chunk' => 20, 'min_gap_ms' => 1200, 'max_gap_ms' => 2800, 'owner_lookups' => $ownerLookups]],
+        ], ['transport_timeout_ms' => 60000 + (int) ceil(count($ids) / 20) * 10000 + $ownerLookups * 5000]);
 
         $feed = json_decode((string) ($this->resultByLabel($result, 'read_stories')['text'] ?? ''), true);
         if ($this->isLoginRedirect($result, []) || ! is_array($feed) || isset($feed['fatal'])) {
@@ -208,7 +213,7 @@ trait ReadsInstagramFeeds
             $username = strtolower((string) ($reel['username'] ?? ($userIds[$id] ?? '')));
             $reels[$username] = [
                 'user_id' => (string) $id,
-                'stories' => array_values(array_map(static fn (array $item): array => $item + [
+                'stories' => array_values(array_map(fn (array $item): array => $this->withResharedPostUrl($item) + [
                     'url' => 'https://www.instagram.com/stories/' . $username . '/' . $item['pk'] . '/',
                 ], array_filter((array) ($reel['items'] ?? []), 'is_array'))),
             ];
@@ -222,6 +227,30 @@ trait ReadsInstagramFeeds
             'status_code' => (int) ($result['status_code'] ?? 0),
             'data' => ['profile' => $resolved, 'reels' => $reels],
         ];
+    }
+
+    /**
+     * A story's `reshared_post` with its post link and owner keys always present.
+     *
+     * @param array<string, mixed> $item
+     * @return array<string, mixed>
+     */
+    private function withResharedPostUrl(array $item): array
+    {
+        if (! is_array($item['reshared_post'] ?? null)) {
+            return $item;
+        }
+        $shared = $item['reshared_post'];
+        $code = (string) ($shared['code'] ?? '');
+        $item['reshared_post'] = [
+            'pk' => (string) ($shared['pk'] ?? ''),
+            'code' => $code,
+            'url' => $code !== '' ? 'https://www.instagram.com/p/' . $this->canonicalShortcode($code, (string) ($shared['pk'] ?? '')) . '/' : '',
+            'owner' => strtolower((string) ($shared['owner'] ?? '')),
+            'owner_id' => (string) ($shared['owner_id'] ?? ''),
+        ];
+
+        return $item;
     }
 
     /**
@@ -308,8 +337,29 @@ JS . "
         hashtags: (item.story_hashtags || []).map((tag) => tag.hashtag?.name).filter(Boolean),
         location: item.story_locations?.[0]?.location?.name || '',
         // A story that shares a post points at that post, so the post can be used (and deduplicated) instead.
-        reshared_post: (item.story_feed_media || [])[0] ? { pk: String(item.story_feed_media[0].media_id || '').split('_')[0], code: item.story_feed_media[0].media_code || '' } : null,
+        // The share sticker rarely names the post's owner; missing owners are looked up below.
+        reshared_post: (item.story_feed_media || [])[0] ? ((shared) => ({ pk: String(shared.media_id || '').split('_')[0], code: shared.media_code || '',
+          owner: shared.media?.user?.username || shared.user?.username || '', owner_id: String(shared.media?.user?.pk || shared.user?.pk || '') }))(item.story_feed_media[0]) : null,
       })).filter((item) => item.pk) };
+    }
+  }
+  // Owner of each shared post (one media lookup per post, paced, at most owner_lookups per run).
+  const owners = {};
+  let lookups = 0;
+  for (const reel of Object.values(reels)) {
+    for (const item of reel.items) {
+      const shared = item.reshared_post;
+      if (!shared || shared.owner || !shared.pk) continue;
+      if (owners[shared.pk] === undefined) {
+        if (lookups >= args.owner_lookups) continue;
+        lookups += 1;
+        await gap();
+        const { status, json } = await getJson('/api/v1/media/' + shared.pk + '/info/');
+        const user = (json?.items || [])[0]?.user || null;
+        owners[shared.pk] = user ? { owner: user.username || '', owner_id: String(user.pk || user.id || '') } : null;
+        if (status === 429) { errors.push({ status, owner_lookup: shared.pk }); lookups = args.owner_lookups; }
+      }
+      if (owners[shared.pk]) Object.assign(shared, owners[shared.pk]);
     }
   }
   return { text: JSON.stringify({ reels, errors }) };

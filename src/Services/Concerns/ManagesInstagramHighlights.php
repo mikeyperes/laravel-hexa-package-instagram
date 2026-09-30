@@ -63,6 +63,9 @@ trait ManagesInstagramHighlights
     private function runHighlightStep(?string $profile, string $action, array $args, string $message): array
     {
         $resolved = $this->config->resolveProfile($profile);
+        if ($action !== 'read' && ($refused = $this->readOnlyRefusal($resolved))) {
+            return $refused;
+        }
         $result = $this->browser->runAutomation($resolved, [
             ['type' => 'goto', 'label' => 'open_home', 'url' => 'https://www.instagram.com/', 'wait_until' => 'domcontentloaded', 'timeout_ms' => 30000, 'wait_ms' => 2000],
             ['type' => 'evaluate', 'label' => 'highlight', 'code' => self::restJs(self::highlightJs()), 'args' => ['action' => $action] + $args],

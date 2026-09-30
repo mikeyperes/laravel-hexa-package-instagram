@@ -10,7 +10,7 @@ class InstagramFollowAuditCommand extends Command
     protected $signature = 'instagram:follow-audit
         {account : Account whose network is checked (@name or name)}
         {--profile= : Logged-in browser profile to read with}
-        {--source=following : following (accounts it follows) or stories (accounts tagged in its stories and Highlights)}
+        {--source=following : following (accounts it follows) or stories (accounts tagged, mentioned or reshared in its stories and Highlights)}
         {--criteria= : JSON object of key => yes/no question; a match needs every answer yes}
         {--context= : One sentence of background for the AI check}
         {--limit=60 : Most accounts to check in this run}

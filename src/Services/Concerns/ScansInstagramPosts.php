@@ -478,6 +478,22 @@ JS;
         return '';
     }
 
+    /** The refusal returned instead of an account action (follow, post, edit, delete, Highlight) in a read-only profile. */
+    private function readOnlyRefusal(string $profile): ?array
+    {
+        if (! $this->config->isReadOnlyProfile($profile)) {
+            return null;
+        }
+
+        return [
+            'success' => false,
+            'message' => 'Browser profile "' . $profile . '" is read-only for Instagram.',
+            'detail' => 'It is listed in instagram.read_only_profiles: it may read but never follow, post, edit, delete or change Highlights.',
+            'status_code' => 423,
+            'data' => ['profile' => $profile, 'read_only' => true],
+        ];
+    }
+
     private function failure(string $message, string $detail): array
     {
         return [

@@ -1,5 +1,18 @@
 # Instagram package bug log
 
+## IG-2026-09-30-02 — A reshared post's owner was missing or wrong, so story discovery never counted it
+
+- **Symptom:** `storyFeeds()` returned `reshared_post` with only `pk` and `code`; the single-item reader filled its
+  `owner` with the share sticker's `product_type` (for example `feed`) when the sticker named no user.
+- **Impact:** story-based discovery (`storyCandidates()`) counted only mentions, tags and co-authors although its
+  docstring promised reshares, so accounts whose posts were reshared were never proposed; callers could read a
+  product type as a username.
+- **Root cause:** the story JS never read the shared post's owner, and the normalizer fell back to `product_type`.
+- **Fix:** 1.15.0: `reshared_post` is `{pk, code, url, owner, owner_id}`; a missing owner is looked up through the
+  post's media info (paced, at most `instagram.story_reshare_owner_lookups` per call); the normalizer never uses
+  `product_type`; `storyCandidates()` counts reshare owners.
+- **Guard:** `CRITICAL — see BUGLOG.md IG-2026-09-30-02` in `ReadsInstagramAccounts` and `InstagramFollowAuditService`.
+
 ## IG-2026-09-30-01 — A Browser Worker failure was reported as Instagram refusing the reader
 
 - **Symptom:** `publicProfileFeeds()` and the slide reader returned `blocked: true` with the detail

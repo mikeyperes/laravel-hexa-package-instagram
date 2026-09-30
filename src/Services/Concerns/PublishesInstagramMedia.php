@@ -39,6 +39,9 @@ trait PublishesInstagramMedia
     public function postStoryImage(?string $profile, string $jpeg): array
     {
         $resolved = $this->config->resolveProfile($profile);
+        if ($refused = $this->readOnlyRefusal($resolved)) {
+            return $refused;
+        }
         $screen = (array) config('instagram.publishing.story_screen', []);
 
         return $this->withStagedUpload($jpeg, function (string $file) use ($resolved, $screen): array {
@@ -67,6 +70,9 @@ trait PublishesInstagramMedia
     public function postFeedImage(?string $profile, string $jpeg, string $caption): array
     {
         $resolved = $this->config->resolveProfile($profile);
+        if ($refused = $this->readOnlyRefusal($resolved)) {
+            return $refused;
+        }
         $caption = mb_substr(trim($caption), 0, (int) config('instagram.publishing.caption_max', 2200));
         $next = '[role=dialog] [role=button]:text-is("Next"), [role=dialog] button:text-is("Next")';
 
@@ -104,6 +110,9 @@ trait PublishesInstagramMedia
     public function editFeedCaption(?string $profile, string $code, string $caption): array
     {
         $resolved = $this->config->resolveProfile($profile);
+        if ($refused = $this->readOnlyRefusal($resolved)) {
+            return $refused;
+        }
         if (! preg_match('/^[A-Za-z0-9_-]{5,40}$/', $code)) {
             return $this->failure('A post short id is required.', 'Use the code recorded when the post was published.');
         }
@@ -155,6 +164,9 @@ trait PublishesInstagramMedia
     public function deleteStory(?string $profile, string $username, string $pk): array
     {
         $resolved = $this->config->resolveProfile($profile);
+        if ($refused = $this->readOnlyRefusal($resolved)) {
+            return $refused;
+        }
         if (! ctype_digit($pk) || ! preg_match('/^[A-Za-z0-9._]{1,30}$/', $username)) {
             return $this->failure('A story id and the account username are required.', 'Use the id recorded when the story was posted.');
         }
@@ -180,6 +192,9 @@ trait PublishesInstagramMedia
     public function deleteFeedPost(?string $profile, string $code, string $pk): array
     {
         $resolved = $this->config->resolveProfile($profile);
+        if ($refused = $this->readOnlyRefusal($resolved)) {
+            return $refused;
+        }
         if (! preg_match('/^[A-Za-z0-9_-]{5,40}$/', $code)) {
             return $this->failure('A post short id is required.', 'Use the code recorded when the post was published.');
         }

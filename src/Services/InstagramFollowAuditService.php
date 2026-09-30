@@ -5,8 +5,8 @@ namespace hexa_package_instagram\Services;
 use hexa_core\AI\Services\AiChatGateway;
 
 /**
- * Finds accounts through another account (the accounts it follows, or the accounts tagged and
- * mentioned in its stories and Highlights), reads each candidate's latest posts in the
+ * Finds accounts through another account (the accounts it follows, or the accounts tagged,
+ * mentioned or reshared in its stories and Highlights), reads each candidate's latest posts in the
  * logged-in browser, and has an AI model answer the caller's yes/no criteria for each one.
  * It never follows, messages or adds anything; callers decide what to do with the matches.
  */
@@ -154,8 +154,8 @@ class InstagramFollowAuditService
     }
 
     /**
-     * Accounts tagged, mentioned or reposted in the account's current stories and Highlights, most
-     * frequent first.
+     * Accounts in the account's current stories and Highlights, most frequent first: mentioned,
+     * tagged or co-authors, and the owners of posts the stories share (reshares).
      *
      * @return array{success: bool, message: string, candidates: array<int, array<string, mixed>>}
      */
@@ -178,7 +178,9 @@ class InstagramFollowAuditService
 
         $counts = [];
         foreach ($items as $item) {
-            $names = array_merge((array) ($item['mentions'] ?? []), (array) ($item['tagged'] ?? []), (array) ($item['coauthors'] ?? []));
+            // CRITICAL — see BUGLOG.md IG-2026-09-30-02: the owner of a post the story shares is a source too.
+            $names = array_merge((array) ($item['mentions'] ?? []), (array) ($item['tagged'] ?? []), (array) ($item['coauthors'] ?? []),
+                [(string) (is_array($item['reshared_post'] ?? null) ? ($item['reshared_post']['owner'] ?? '') : '')]);
             foreach (array_unique(array_map('strtolower', $names)) as $name) {
                 if ($name !== '' && $name !== $account) {
                     $counts[$name] = ($counts[$name] ?? 0) + 1;
