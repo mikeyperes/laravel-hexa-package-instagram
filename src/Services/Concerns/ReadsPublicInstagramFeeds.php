@@ -202,6 +202,7 @@ return (async () => {
             owner: media.owner?.username || owner,
             owner_name: context.full_name || '',
             coauthors: (media.coauthor_producers || []).map((user) => user?.username).filter(Boolean),
+            tagged: (media.edge_media_to_tagged_user?.edges || []).map((edge) => edge?.node?.user?.username).filter(Boolean),
             caption: media.edge_media_to_caption?.edges?.[0]?.node?.text || '',
             accessibility_caption: media.accessibility_caption || '',
             product_type: video ? 'clips' : '',

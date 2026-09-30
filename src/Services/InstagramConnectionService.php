@@ -4,6 +4,7 @@ namespace hexa_package_instagram\Services;
 
 use hexa_package_browser_console\Services\BrowserConsoleRuntimeService;
 use hexa_package_browser_worker\Contracts\BrowserWorkerBridgeContract;
+use hexa_package_browser_worker\Services\BrowserHttpService;
 use hexa_package_instagram\Domains\Config\InstagramConfigRepository;
 
 class InstagramConnectionService
@@ -12,7 +13,64 @@ class InstagramConnectionService
         private readonly InstagramConfigRepository $config,
         private readonly BrowserWorkerBridgeContract $worker,
         private readonly BrowserConsoleRuntimeService $console,
+        private readonly BrowserHttpService $http,
     ) {}
+
+    /**
+     * Whether a logged-in browser profile can read Instagram now, with the exact reason when it cannot:
+     * automation paused, Browser Console runtime not activated, Instagram login not verified, or (when
+     * $requireRoute) no protected route (the profile is on a direct connection). Nothing is launched or
+     * activated here; the login is re-verified once only when the runtime is up and the last check lapsed.
+     *
+     * @return array{ready: bool, reason: string, profile: string, paused: bool, runtime_ready: bool, authenticated: bool, transport: string, console_url: string}
+     */
+    public function readGate(string $profile, bool $requireRoute = true): array
+    {
+        $profile = $this->config->normalizeProfile($profile);
+        $gate = [
+            'ready' => false,
+            'reason' => '',
+            'profile' => $profile,
+            'paused' => false,
+            'runtime_ready' => false,
+            'authenticated' => false,
+            'transport' => 'unknown',
+            'console_url' => $this->console->url($profile),
+        ];
+
+        if (method_exists($this->worker, 'pausedProfiles') && in_array($profile, (array) $this->worker->pausedProfiles(), true)) {
+            return ['paused' => true, 'reason' => 'Automation is paused for browser profile "'.$profile.'" (setting browser_worker_paused_profiles).'] + $gate;
+        }
+
+        $status = $this->status($profile, null, false);
+        $data = (array) ($status['data'] ?? []);
+        $gate['runtime_ready'] = (bool) ($data['runtime_ready'] ?? false);
+        $gate['authenticated'] = (bool) ($data['authenticated'] ?? false);
+        $gate['transport'] = (string) ($data['transport'] ?? 'unknown');
+        $gate['console_url'] = (string) (($data['console_url'] ?? '') ?: $gate['console_url']);
+        if (! $gate['runtime_ready']) {
+            $detail = (string) ($status['detail'] ?? '');
+
+            return ['reason' => 'The '.$profile.' Browser Console runtime needs activation (not running).'.($detail !== '' && ! str_contains($detail, 'runtime is not ready') ? ' '.$detail : '')] + $gate;
+        }
+        if (! ($status['success'] ?? false)) {
+            // The last login verification lapsed or never happened: verify it once now.
+            $status = $this->status($profile, null, true);
+            $data = (array) ($status['data'] ?? []);
+            $gate['authenticated'] = (bool) ($data['authenticated'] ?? false);
+            $gate['runtime_ready'] = (bool) ($data['runtime_ready'] ?? $gate['runtime_ready']);
+            if (! ($status['success'] ?? false)) {
+                return ['reason' => $gate['authenticated']
+                    ? 'The '.$profile.' session is not ready: '.(string) ($status['detail'] ?? 'unknown reason.')
+                    : 'Instagram is not logged in (login not verified) in the '.$profile.' session: '.(string) ($status['detail'] ?? '')] + $gate;
+            }
+        }
+        if ($requireRoute && $this->http->routeProxyUrl($profile) === null) {
+            return ['reason' => 'The '.$profile.' session has no protected route (direct connection). Assign its VPN route first.'] + $gate;
+        }
+
+        return ['ready' => true] + $gate;
+    }
 
     public function status(string $profile, ?string $expectedUsername = null, bool $refresh = true): array
     {

@@ -49,6 +49,8 @@ class InstagramServiceProvider extends ServiceProvider
                 \hexa_package_instagram\Console\InstagramHighlightCommand::class,
                 \hexa_package_instagram\Console\InstagramEditCommand::class,
                 \hexa_package_instagram\Console\InstagramPublicationsCommand::class,
+                \hexa_package_instagram\Console\InstagramPostsCommand::class,
+                \hexa_package_instagram\Console\InstagramStoriesCommand::class,
             ]);
         }
     }

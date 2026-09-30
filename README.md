@@ -40,6 +40,28 @@ sticker does not name the owner it is looked up from the post, slowly, up to
 `followingFeed($profile, $username, $max)` lists the accounts one account follows (username, name,
 id, private/verified), 50 per page.
 
+## One account's posts and stories (read-only commands)
+
+Any caller reads one account through one explicit logged-in browser profile; the caller owns what the results mean.
+
+```bash
+php artisan instagram:posts <account> --profile=<profile> [--limit=5] [--allow-public-fallback] [--json]
+php artisan instagram:stories <account> --profile=<profile> [--owner-lookups=10] [--json]
+```
+
+- Both first pass `InstagramConnectionService::readGate($profile)` and stop with its exact reason when the profile is
+  paused (`browser_worker_paused_profiles`), its Browser Console runtime needs activation, Instagram is not logged in,
+  or it has no protected route (direct connection). Nothing is launched, activated or logged in by them.
+- `instagram:posts` → `{success, message, account, profile, posts_source (logged_in|public_embed), posts: [{url,
+  shortcode, taken_at, caption, image_urls, video ({url, cover_url}|null), mentions, tagged, coauthors}], errors}`
+  through `profileFeeds()`. Only with `--allow-public-fallback`, a failed logged-in read of the account falls back to
+  its public profile embed through `instagram.public_reader_profile` (`instagram-public`).
+- `instagram:stories` → `{success, message, account, profile, stories: [{id, url, taken_at, image_url, video_url,
+  reshared_post ({url, code, owner, owner_id}|null), mentions, tagged, links}], errors}` through `accountProfiles()`
+  (account id) and `storyFeeds()`. No fallback.
+- Reads are paced with a random pause in `instagram.account_reads` (4-9 s) between the reads of one account.
+  Service methods: `InstagramScraperService::accountPosts()` and `accountStories()`.
+
 ## Publishing stories and posts
 
 `InstagramPublisherService` posts from the account logged in to a browser profile, for any caller:

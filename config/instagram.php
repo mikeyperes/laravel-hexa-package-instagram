@@ -2,7 +2,7 @@
 
 return [
     'enabled' => env('INSTAGRAM_ENABLED', true),
-    'version' => '1.15.0',
+    'version' => '1.16.0',
     // Account discovery through another account's following list or stories (InstagramFollowAuditService).
     'follow_audit' => [
         'model' => env('INSTAGRAM_FOLLOW_AUDIT_MODEL', 'claude-haiku-4-5-20251001'),
@@ -14,6 +14,14 @@ return [
     ],
     // storyFeeds(): most shared posts per call whose owner is looked up when the story's share sticker does not name it.
     'story_reshare_owner_lookups' => 10,
+    // instagram:posts / instagram:stories (accountPosts(), accountStories()): a random pause in this range between
+    // the reads of one account (and the posts read of one account's feed).
+    'account_reads' => [
+        'min_gap_ms' => 4000,
+        'max_gap_ms' => 9000,
+    ],
+    // Logged-out browser profile for instagram:posts --allow-public-fallback (each account's public profile embed).
+    'public_reader_profile' => env('INSTAGRAM_PUBLIC_READER_PROFILE', 'instagram-public'),
     // Browser profiles that may only read Instagram (scout accounts): follow, post, edit, delete and Highlight
     // changes are refused (423). Other packages may add their reader profiles here at boot.
     'read_only_profiles' => array_values(array_filter(array_map('trim', explode(',', (string) env('INSTAGRAM_READ_ONLY_PROFILES', ''))))),
