@@ -1,5 +1,13 @@
 # Instagram package bug log
 
+## IG-2026-10-04-01 — Public reads ignored the caller deadline and overstated route evidence (high)
+
+- **Symptom:** fetches/retry pauses continued beyond the JPN caller budget; uncertain-profile messages claimed a second NordVPN server without observed route proof. Carousel extraction always reported one complete media item.
+- **Impact:** unbounded recovery and misleading source/coverage reporting.
+- **Root cause:** browser JS had only per-fetch timeouts and descriptive settlement messages; first-image extraction erased carousel uncertainty.
+- **Patch:** optional caller deadline bounds transport, fetches and every pause/retry. Return explicit deadline exhaustion without inventing a refusal. Uncertain accounts remain unread, with no second-server claim. Preserve carousel/incomplete-media flags through the existing feed normalizer; all-slide reading stays with its existing owner.
+- **Guard:** CRITICAL marker in ReadsPublicInstagramFeeds. Fresh-tab Instagram navigation, public-only reads, normal pacing, six-post JPN bounds and immediate Browser Worker 409 distinction remain.
+
 ## IG-2026-09-30-02 — A reshared post's owner was missing or wrong, so story discovery never counted it
 
 - **Symptom:** `storyFeeds()` returned `reshared_post` with only `pk` and `code`; the single-item reader filled its

@@ -56,6 +56,17 @@ trait ReadsPublicInstagramFeeds
         $limit = max(1, min($limit, 12));
         $minGap = max(800, (int) ($options['min_gap_ms'] ?? 1500));
         $maxGap = max($minGap, (int) ($options['max_gap_ms'] ?? 4000));
+        $deadline = isset($options['deadline_at']) ? (float) $options['deadline_at'] : null;
+        $remainingMs = $deadline !== null ? max(0, (int) floor(($deadline - microtime(true)) * 1000)) : null;
+        if ($remainingMs !== null && $remainingMs < 35000) {
+            return [
+                'success' => false,
+                'message' => 'Insufficient time for another public browser read before the scan deadline.',
+                'detail' => 'The remaining accounts were not read.',
+                'status_code' => 0,
+                'data' => ['profile' => $resolved, 'accounts' => [], 'blocked' => false, 'deadline_exhausted' => true],
+            ];
+        }
 
         $steps = [];
         if (! empty($options['fresh'])) {
@@ -74,12 +85,13 @@ trait ReadsPublicInstagramFeeds
                 'soft_limit' => max(0, (int) ($options['soft_limit'] ?? 2)),
                 'settled' => array_values(array_map('strtolower', (array) ($options['settled'] ?? []))),
                 'fetch_timeout_ms' => max(5000, (int) ($options['fetch_timeout_ms'] ?? 20000)),
+                'deadline_ms' => $deadline !== null ? (int) floor($deadline * 1000) : null,
             ],
         ];
 
         $result = $this->browser->runAutomation($resolved, $steps, [
             // Room for one retry of every account (fetch timeout plus gap) on top of the normal read.
-            'transport_timeout_ms' => 45000 + (count($usernames) * 2 * ($maxGap + 8000)),
+            'transport_timeout_ms' => min($remainingMs ?? PHP_INT_MAX, 45000 + (count($usernames) * 2 * ($maxGap + max(5000, (int) ($options['fetch_timeout_ms'] ?? 20000))))),
             'public_read_only' => true,
         ]);
 
@@ -154,6 +166,7 @@ trait ReadsPublicInstagramFeeds
                 'blocked_at' => $blocked ? (string) $feed['blocked']['username'] : '',
                 'blocked_status' => $blocked ? (int) $feed['blocked']['status'] : 0,
                 'blocked_uncertain' => $blocked ? array_values((array) ($feed['blocked']['uncertain'] ?? [])) : [],
+                'deadline_exhausted' => ! empty($feed['deadline_exhausted']),
             ],
         ];
     }
@@ -165,14 +178,22 @@ return (async () => {
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const largest = (resources) => (resources || []).slice().sort((a, b) => (b.config_width || 0) - (a.config_width || 0))[0]?.src || '';
   const settled = new Set(args.settled || []);
-  const gap = () => sleep(args.min_gap_ms + Math.random() * (args.max_gap_ms - args.min_gap_ms));
+  // CRITICAL — see BUGLOG.md IG-2026-10-04-01: every fetch and pause shares the caller's deadline.
+  const timeLeft = () => args.deadline_ms == null ? Infinity : Math.max(0, args.deadline_ms - Date.now());
+  const pause = async (ms) => {
+    if (timeLeft() <= ms) return false;
+    await sleep(ms);
+    return timeLeft() > 0;
+  };
+  const gap = () => pause(args.min_gap_ms + Math.random() * (args.max_gap_ms - args.min_gap_ms));
   // One account: { ok, ... } when read, { refused } when Instagram refuses the reader, or { uncertain } when
   // Instagram gave no profile (its "may be broken" page, an empty page, a timeout): not proof the account is gone.
   const read = async (username) => {
     const started = Date.now();
     let status = 0;
+    if (timeLeft() <= 0) return { deadline: true };
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), args.fetch_timeout_ms);
+    const timer = setTimeout(() => controller.abort(), Math.min(args.fetch_timeout_ms, timeLeft()));
     try {
       const response = await fetch('/' + encodeURIComponent(username) + '/embed/', { credentials: 'include', signal: controller.signal });
       status = response.status;
@@ -212,7 +233,9 @@ return (async () => {
             cover_url: image,
             image_urls: video || !image ? [] : [image],
             video_urls: [],
-            media_count: 1,
+            media_count: Math.max(1, (media.edge_sidecar_to_children?.edges || []).length),
+            is_carousel: media.__typename === 'GraphSidecar' || (media.edge_sidecar_to_children?.edges || []).length > 1,
+            media_complete: media.__typename !== 'GraphSidecar' && (media.edge_sidecar_to_children?.edges || []).length <= 1,
             location: media.location?.name || '',
           };
         });
@@ -229,10 +252,12 @@ return (async () => {
   const retry = [];
   let streak = [];
   let blocked = null;
+  let deadlineExhausted = false;
   for (let index = 0; index < args.usernames.length && !blocked; index += 1) {
     const username = args.usernames[index];
-    if (index > 0) await gap();
+    if (index > 0 && !await gap()) { deadlineExhausted = true; break; }
     const result = await read(username);
+    if (result.deadline || timeLeft() <= 0) { deadlineExhausted = true; break; }
     if (result.refused) {
       blocked = { username, status: result.status };
     } else if (result.uncertain && !settled.has(username.toLowerCase())) {
@@ -244,14 +269,15 @@ return (async () => {
     } else {
       retry.push(...streak);
       streak = [];
-      accounts.push(result.uncertain ? { ...result, error: 'Instagram does not show this profile to a logged-out reader, on a second NordVPN server too (embedding may be turned off, or the account is age-restricted); it needs a logged-in read. Last answer: ' + result.error } : result);
+      accounts.push(result.uncertain ? { ...result, error: 'Instagram did not show this profile on this logged-out read. It remains unread; a logged-in read may be needed. Last answer: ' + result.error } : result);
     }
   }
   if (!blocked) retry.push(...streak);
   // Uncertain accounts get a second try at the end of the batch, after a longer wait.
-  for (const first of blocked ? [] : retry) {
-    await sleep(5000 + Math.random() * 5000);
+  for (const first of blocked || deadlineExhausted ? [] : retry) {
+    if (!await pause(5000 + Math.random() * 5000)) { deadlineExhausted = true; break; }
     const result = await read(first.username);
+    if (result.deadline || timeLeft() <= 0) { deadlineExhausted = true; break; }
     if (result.refused) {
       blocked = { username: first.username, status: result.status };
       break;
@@ -263,7 +289,7 @@ return (async () => {
     const waiting = retry.map((item) => item.username).filter((name) => !accounts.some((done) => done.username === name));
     blocked.uncertain = [...new Set([...(blocked.uncertain || []), ...waiting])];
   }
-  return { text: JSON.stringify({ accounts, blocked }) };
+  return { text: JSON.stringify({ accounts, blocked, deadline_exhausted: deadlineExhausted }) };
 })();
 JS;
     }

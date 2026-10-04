@@ -162,6 +162,8 @@ trait ReadsInstagramFeeds
             'cover_url' => (string) ($post['cover_url'] ?? ''),
             'post_media_urls' => array_values(array_unique(array_merge($imageUrls, $videoUrls))),
             'post_media_count' => max(1, (int) ($post['media_count'] ?? 1)),
+            'is_carousel' => (bool) ($post['is_carousel'] ?? (count($imageUrls) > 1)),
+            'media_complete' => (bool) ($post['media_complete'] ?? true),
             'source' => (string) ($post['source'] ?? 'instagram_feed'),
             'shortcode' => $shortcode,
             'instagram_code' => (string) $post['code'],
