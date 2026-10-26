@@ -13,13 +13,13 @@ trait TestsInstagramFeeds
         $feed = [
             'doc_id' => '29015124851429106',
             'accounts' => [
-                ['username' => 'palm.beach.chabad', 'ok' => true, 'status' => 200, 'ms' => 812, 'posts' => [[
+                ['username' => 'shore.side.chabad', 'ok' => true, 'status' => 200, 'ms' => 812, 'posts' => [[
                     'code' => 'ABC123', 'pk' => '', 'posted_at' => '2026-09-20T17:21:06.000Z',
-                    'taken_at' => 1790011266, 'owner' => 'palm.beach.chabad', 'owner_name' => 'Palm Beach Chabad', 'coauthors' => ['rookerymiami'],
+                    'taken_at' => 1790011266, 'owner' => 'shore.side.chabad', 'owner_name' => 'Shore Side Chabad', 'coauthors' => ['rookerycity'],
                     'caption' => 'Sukkot dinner, September 25 at 7 PM.', 'accessibility_caption' => 'May be a flyer', 'product_type' => 'carousel_container',
                     'pinned' => true, 'primary_tag' => 'img', 'primary_media_url' => 'https://scontent.cdninstagram.com/v/one.jpg',
                     'image_urls' => ['https://scontent.cdninstagram.com/v/one.jpg', 'https://scontent.cdninstagram.com/v/two.jpg'],
-                    'video_urls' => [], 'media_count' => 3, 'location' => 'Palm Beach',
+                    'video_urls' => [], 'media_count' => 3, 'location' => 'Shore Side',
                 ], [
                     // A private account's long post id is the short id (the post's numeric id in base 64) plus a suffix.
                     'code' => 'CB1vrXrJdZRBG-E2kXXKigj0kjJPDQl9AyCCPk0', 'pk' => '2338985270032324177', 'product_type' => 'feed', 'caption' => 'Shabbat.',
@@ -30,9 +30,9 @@ trait TestsInstagramFeeds
         ];
         $bridge = Mockery::mock(BrowserWorkerBridgeContract::class);
         $bridge->shouldReceive('runAutomation')->once()->withArgs(function (?string $profile, array $steps): bool {
-            return $profile === 'jpn-miami'
-                && $steps[0]['url'] === 'https://www.instagram.com/palm.beach.chabad/'
-                && $steps[1]['args']['usernames'] === ['palm.beach.chabad', 'private_account', 'never_reached']
+            return $profile === 'jpn-city'
+                && $steps[0]['url'] === 'https://www.instagram.com/shore.side.chabad/'
+                && $steps[1]['args']['usernames'] === ['shore.side.chabad', 'private_account', 'never_reached']
                 && $steps[1]['args']['limit'] === 6;
         })->andReturn([
             'success' => true,
@@ -41,11 +41,11 @@ trait TestsInstagramFeeds
         ]);
         app()->instance(BrowserWorkerBridgeContract::class, $bridge);
 
-        $result = app(InstagramScraperService::class)->profileFeeds('jpn-miami', ['Palm.Beach.Chabad', 'https://instagram.com/private_account/', 'never_reached'], 6);
+        $result = app(InstagramScraperService::class)->profileFeeds('jpn-city', ['Shore.Side.Chabad', 'https://instagram.com/private_account/', 'never_reached'], 6);
 
         $this->assertTrue($result['success']);
         $this->assertSame('1 of 3 Instagram feeds read.', $result['message']);
-        $account = $result['data']['accounts']['palm.beach.chabad'];
+        $account = $result['data']['accounts']['shore.side.chabad'];
         $this->assertSame(['https://www.instagram.com/p/ABC123/', 'https://www.instagram.com/p/CB1vrXrJdZR/'], $account['post_links']);
         $this->assertSame('CB1vrXrJdZRBG-E2kXXKigj0kjJPDQl9AyCCPk0', $account['posts']['CB1vrXrJdZR']['instagram_code']);
         $scan = $account['posts']['ABC123'];
@@ -73,7 +73,7 @@ trait TestsInstagramFeeds
         ]);
         app()->instance(BrowserWorkerBridgeContract::class, $bridge);
 
-        $result = app(InstagramScraperService::class)->storyFeeds('jpn-miami', ['111' => 'bdhlshul', '222' => 'cbiboca', 'not-an-id' => 'x']);
+        $result = app(InstagramScraperService::class)->storyFeeds('jpn-city', ['111' => 'bdhlshul', '222' => 'cbishore', 'not-an-id' => 'x']);
 
         $this->assertTrue($result['success']);
         $this->assertSame('1 of 2 accounts have current stories.', $result['message']);
@@ -86,7 +86,7 @@ trait TestsInstagramFeeds
     public function test_following_feed_lists_the_accounts_one_account_follows(): void
     {
         $bridge = Mockery::mock(BrowserWorkerBridgeContract::class);
-        $bridge->shouldReceive('runAutomation')->once()->withArgs(fn (?string $profile, array $steps): bool => $steps[0]['url'] === 'https://www.instagram.com/miamijpn/')->andReturn([
+        $bridge->shouldReceive('runAutomation')->once()->withArgs(fn (?string $profile, array $steps): bool => $steps[0]['url'] === 'https://www.instagram.com/cityjpn/')->andReturn([
             'success' => true,
             'data' => ['results' => [['label' => 'read_following', 'result' => ['text' => json_encode(['user_id' => '999', 'complete' => true, 'error' => null, 'users' => [
                 ['username' => 'kesherconnect', 'full_name' => 'Kesher', 'user_id' => '5', 'is_private' => false, 'is_verified' => false],
@@ -94,10 +94,10 @@ trait TestsInstagramFeeds
         ]);
         app()->instance(BrowserWorkerBridgeContract::class, $bridge);
 
-        $result = app(InstagramScraperService::class)->followingFeed('jpn-miami', '@miamijpn');
+        $result = app(InstagramScraperService::class)->followingFeed('jpn-city', '@cityjpn');
 
         $this->assertTrue($result['success']);
-        $this->assertSame('@miamijpn follows 1 accounts.', $result['message']);
+        $this->assertSame('@cityjpn follows 1 accounts.', $result['message']);
         $this->assertSame('kesherconnect', $result['data']['users'][0]['username']);
         $this->assertTrue($result['data']['complete']);
     }
@@ -111,7 +111,7 @@ trait TestsInstagramFeeds
         ]);
         app()->instance(BrowserWorkerBridgeContract::class, $bridge);
 
-        $result = app(InstagramScraperService::class)->profileFeeds('jpn-miami', ['miamijpn']);
+        $result = app(InstagramScraperService::class)->profileFeeds('jpn-city', ['cityjpn']);
 
         $this->assertFalse($result['success']);
         $this->assertSame('Instagram page modules are unavailable.', $result['detail']);

@@ -19,18 +19,18 @@ trait TestsInstagramVerificationAndRoutes
 
         $this->assertStringContainsString('Browser Console owns Instagram login and network routing', $rendered);
         $this->assertStringNotContainsString('saved password', strtolower($rendered));
-        $this->assertStringNotContainsString('jpn-miami.settings', $rendered);
+        $this->assertStringNotContainsString('jpn.settings', $rendered);
     }
 
     public function test_overview_uses_the_single_connection_status_and_browser_console_handoff(): void
     {
         $rendered = view('instagram::workspace.index', [
             'status' => [
-                'active_profile' => 'jpn-miami',
+                'active_profile' => 'jpn-city',
                 'active_account' => [
-                    'label' => 'Instagram - jpnmiami',
-                    'instagram_username' => 'miamijpn',
-                    'console_url' => 'https://code.example.test/browser-console/sessions?profile=jpn-miami',
+                    'label' => 'Instagram - jpncity',
+                    'instagram_username' => 'cityjpn',
+                    'console_url' => 'https://code.example.test/browser-console/sessions?profile=jpn-city',
                 ],
                 'has_meta_token' => false,
             ],
@@ -66,7 +66,7 @@ trait TestsInstagramVerificationAndRoutes
         $this->postJson('/instagram/accounts', [
             'label' => 'JPN Main',
             'profile' => 'JPN.Main',
-            'instagram_username' => 'jpnmiami',
+            'instagram_username' => 'jpncity',
             'set_active' => true,
         ])->assertOk()->assertJsonPath('settings.session_profile', 'jpn-main');
 
@@ -88,7 +88,7 @@ trait TestsInstagramVerificationAndRoutes
     public function test_raw_workspace_actions_are_saved_into_history(): void
     {
         $this->withoutMiddleware();
-        $state = $this->readyWorkerState('jpn-miami', 'direct');
+        $state = $this->readyWorkerState('jpn-city', 'direct');
         $this->bindInstagramWorker($state);
 
         app()->instance(BrowserWorkerBridgeContract::class, new class($state) extends BrowserWorkerBridge
@@ -115,15 +115,15 @@ trait TestsInstagramVerificationAndRoutes
                         'results' => [[
                             'label' => 'extract_profile',
                             'result' => [
-                                'url' => 'https://www.instagram.com/jpnmiami/',
-                                'title' => 'JPN Miami',
-                                'heading' => 'JPN Miami',
+                                'url' => 'https://www.instagram.com/jpncity/',
+                                'title' => 'JPN City',
+                                'heading' => 'JPN City',
                                 'body_excerpt' => 'Profile excerpt',
                                 'post_links' => ['https://www.instagram.com/p/ABC123/'],
                                 'media' => [],
                             ],
                         ]],
-                        'final' => ['final_url' => 'https://www.instagram.com/jpnmiami/'],
+                        'final' => ['final_url' => 'https://www.instagram.com/jpncity/'],
                     ],
                 ];
             }
@@ -137,7 +137,7 @@ trait TestsInstagramVerificationAndRoutes
             {
                 $body = str_contains($url, '/embed/captioned/')
                     ? '<html><body><img class="EmbeddedMediaImage" src="https://cdn.example.com/post-full.jpg"></body></html>'
-                    : '<html><head><meta property="og:title" content="Post by JPN Miami"><meta property="og:description" content="Caption proof text"><meta property="og:image" content="https://cdn.example.com/post-full.jpg"></head></html>';
+                    : '<html><head><meta property="og:title" content="Post by JPN City"><meta property="og:description" content="Caption proof text"><meta property="og:image" content="https://cdn.example.com/post-full.jpg"></head></html>';
 
                 return ['success' => true, 'status_code' => 200, 'body' => $body, 'headers' => [], 'final_url' => $url, 'error' => null];
             }
@@ -145,18 +145,18 @@ trait TestsInstagramVerificationAndRoutes
 
         $this->postJson('/instagram/accounts', [
             'label' => 'JPN Main',
-            'profile' => 'jpn-miami',
-            'instagram_username' => 'jpnmiami',
+            'profile' => 'jpn-city',
+            'instagram_username' => 'jpncity',
             'set_active' => true,
         ])->assertOk();
 
-        $this->getJson('/instagram/status?profile=jpn-miami')->assertOk()->assertJsonPath('data.connected', true);
-        $this->postJson('/instagram/profile-scan', ['profile' => 'jpn-miami', 'instagram_username' => 'jpnmiami', 'limit' => 6])
+        $this->getJson('/instagram/status?profile=jpn-city')->assertOk()->assertJsonPath('data.connected', true);
+        $this->postJson('/instagram/profile-scan', ['profile' => 'jpn-city', 'instagram_username' => 'jpncity', 'limit' => 6])
             ->assertOk()
             ->assertJsonPath('data.scan.post_links.0', 'https://www.instagram.com/p/ABC123/');
         $this->postJson('/instagram/import-post', ['url' => 'https://www.instagram.com/p/ABC123/', 'include_image_data' => false])
             ->assertOk()
-            ->assertJsonPath('data.title', 'Post by JPN Miami');
+            ->assertJsonPath('data.title', 'Post by JPN City');
 
         foreach (['raw_status', 'raw_profile_scan', 'raw_post_import'] as $action) {
             $this->assertDatabaseHas('activity_logs', ['category' => 'instagram', 'action' => $action]);

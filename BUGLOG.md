@@ -34,7 +34,7 @@
 
 ## IG-2026-09-24-01 — Every story after the first failed once the account had a live story
 
-- **Audit:** JPN story run to @miamijpn (#2067 and #2124 after #2109 posted).
+- **Audit:** JPN story run to the city account (#2067 and #2124 after #2109 posted).
 - **Symptom:** `choose_image` timed out waiting for a file chooser; nothing was posted.
 - **Impact:** Only one story per 24 hours could be posted to an account.
 - **Root cause:** With a story live, the "Your story" tray item opens the viewer and the story camera input sits in the header, 9 levels from the "Your story" text; the input finder looked only 4 levels up and returned missing.
@@ -51,7 +51,7 @@
 
 ## IG-2026-09-23-01 — Schemeless profile URL was rejected as a username
 
-- **Symptom:** `jpn-miami:add-instagram-account "instagram.com/cluballenby/"` failed with "Enter one valid Instagram username."
+- **Symptom:** `jpn:add-instagram-account "instagram.com/cluballenby/"` failed with "Enter one valid Instagram username."
 - **Impact:** Profile links copied without `https://`, or with a shared-link `?igsh=` query, could not be added to any saved list.
 - **Root cause:** `normalizeUsername()` removed the Instagram host only when the URL began with `http://` or `https://`, and it kept query strings.
 - **Patch:** The optional scheme, `www.` and `m.` host prefixes, and any query or fragment are removed before the username is validated.

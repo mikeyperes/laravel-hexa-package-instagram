@@ -72,8 +72,8 @@ php artisan instagram:stories <account> --profile=<profile> [--owner-lookups=10]
 - Every post and delete is read back from the account's own stories or posts. Records live in `instagram_publications`.
 
 ```bash
-php artisan instagram:publish story /path/or/https/image.jpg --profile=jpn-miami --key=jpn-event:1979
-php artisan instagram:publish post image.jpg --caption="..." --profile=jpn-miami --key=jpn-event:1979
+php artisan instagram:publish story /path/or/https/image.jpg --profile=jpn-<city> --key=jpn-event:1979
+php artisan instagram:publish post image.jpg --caption="..." --profile=jpn-<city> --key=jpn-event:1979
 php artisan instagram:publications --kind=story --key=jpn-event:1979   # live check
 php artisan instagram:unpublish <publication id>                      # delete + confirm
 php artisan instagram:edit <publication id> --caption="..."            # replace a post caption + confirm

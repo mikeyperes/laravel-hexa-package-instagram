@@ -168,14 +168,14 @@ trait TestsInstagramPublicImportsAndScans
                             ]],
                         ],
                         'final' => [
-                            'final_url' => 'https://www.instagram.com/accounts/login/?next=https%3A%2F%2Fwww.instagram.com%2Fjpnmiami%2F',
+                            'final_url' => 'https://www.instagram.com/accounts/login/?next=https%3A%2F%2Fwww.instagram.com%2Fjpncity%2F',
                         ],
                     ],
                 ];
             }
         });
 
-        $result = app(InstagramScraperService::class)->profileScan('ops.backup', 'jpnmiami', 3);
+        $result = app(InstagramScraperService::class)->profileScan('ops.backup', 'jpncity', 3);
 
         $this->assertFalse($result['success']);
         $this->assertSame('Instagram profile scan requires a connected account.', $result['message']);
@@ -265,7 +265,7 @@ trait TestsInstagramPublicImportsAndScans
             }
         });
 
-        $result = app(InstagramScraperService::class)->storyScan('jpn-miami', 'miamijpn');
+        $result = app(InstagramScraperService::class)->storyScan('jpn-city', 'cityjpn');
 
         $this->assertFalse($result['success']);
         $this->assertSame('Instagram story scan requires a connected account.', $result['message']);

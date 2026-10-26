@@ -76,8 +76,8 @@ class InstagramPackageTest extends TestCase
         $config = app(InstagramConfigRepository::class);
 
         $this->assertSame('cluballenby', $config->normalizeUsername('instagram.com/cluballenby/'));
-        $this->assertSame('rookerymiami', $config->normalizeUsername('https://www.instagram.com/rookerymiami/'));
+        $this->assertSame('rookerycity', $config->normalizeUsername('https://www.instagram.com/rookerycity/'));
         $this->assertSame('cluballenby', $config->normalizeUsername('www.instagram.com/ClubAllenby?igsh=abc123'));
-        $this->assertSame('@miamijpn', $config->normalizeUsername('@MiamiJPN'));
+        $this->assertSame('@cityjpn', $config->normalizeUsername('@CityJPN'));
     }
 }

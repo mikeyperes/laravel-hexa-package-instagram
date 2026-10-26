@@ -54,11 +54,11 @@ trait TestsInstagramProfileDiscovery
                             ['label' => 'extract_following', 'result' => [
                                 'body_excerpt' => 'Following dialog proof',
                                 'username_count' => 3,
-                                'usernames' => ['eli.mishael', 'mikeyperes', 'yjpalmbeach'],
+                                'usernames' => ['eli.mishael', 'mikeyperes', 'yjshoreside'],
                             ]],
                         ],
                         'final' => [
-                            'final_url' => 'https://www.instagram.com/miamijpn/',
+                            'final_url' => 'https://www.instagram.com/cityjpn/',
                             'screenshot_data_url' => 'data:image/png;base64,proof',
                         ],
                     ],
@@ -67,7 +67,7 @@ trait TestsInstagramProfileDiscovery
         };
         app()->instance(BrowserWorkerBridgeContract::class, $spy);
 
-        $result = app(InstagramScraperService::class)->followingScan('jpn-miami', 'miamijpn', 80);
+        $result = app(InstagramScraperService::class)->followingScan('jpn-city', 'cityjpn', 80);
 
         $this->assertTrue($result['success']);
         $this->assertSame('Instagram following scan completed.', $result['message']);
@@ -104,7 +104,7 @@ trait TestsInstagramProfileDiscovery
                                 'username_count' => 2,
                                 'usernames' => [
                                     ['username' => 'the_house_of_more', 'source' => 'feed_text'],
-                                    ['username' => 'yjpalmbeach', 'source' => 'feed_text'],
+                                    ['username' => 'yjshoreside', 'source' => 'feed_text'],
                                 ],
                             ]],
                         ],
@@ -116,7 +116,7 @@ trait TestsInstagramProfileDiscovery
             }
         });
 
-        $result = app(InstagramScraperService::class)->activeStoryCandidatesScan('jpn-miami', 'miamijpn', 24);
+        $result = app(InstagramScraperService::class)->activeStoryCandidatesScan('jpn-city', 'cityjpn', 24);
 
         $this->assertTrue($result['success']);
         $this->assertSame('Instagram active story candidates loaded.', $result['message']);

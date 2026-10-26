@@ -177,7 +177,7 @@ class InstagramWorkspaceController extends Controller
                     'type' => $this->logTypeForAction($log),
                     'message' => $log->description,
                     'detail' => $log->context ?: null,
-                    'time' => optional($log->created_at)->timezone(config('app.timezone', 'America/New_York'))->format('H:i:s'),
+                    'time' => optional($log->created_at)->timezone(config('app.timezone', 'UTC'))->format('H:i:s'),
                 ];
             })
             ->values()

@@ -13,14 +13,14 @@ trait TestsInstagramAccountSessions
     public function test_repository_saves_multiple_accounts_and_active_profile(): void
     {
         $repository = app(InstagramConfigRepository::class);
-        $repository->saveAccount('JPN Main', 'JPN.Main', 'JPNMiami', true);
+        $repository->saveAccount('JPN Main', 'JPN.Main', 'JPNCity', true);
         $repository->saveAccount('Ops Backup', 'ops_backup', 'ops.backup', false);
 
         $settings = $repository->all();
 
         $this->assertSame('jpn-main', $settings['session_profile']);
         $this->assertCount(2, $settings['accounts']);
-        $this->assertSame('jpnmiami', $repository->findAccount('JPN.Main')['instagram_username']);
+        $this->assertSame('jpncity', $repository->findAccount('JPN.Main')['instagram_username']);
         $this->assertSame('ops.backup', $repository->findAccount('ops_backup')['instagram_username']);
     }
 
@@ -37,26 +37,26 @@ trait TestsInstagramAccountSessions
     public function test_connection_requires_runtime_authentication_and_exact_account_evidence(): void
     {
         $repository = app(InstagramConfigRepository::class);
-        $repository->saveAccount('JPN Main', 'jpn-miami', 'miamijpn', true);
-        $this->bindInstagramWorker($this->readyWorkerState('jpn-miami', 'proxy'));
+        $repository->saveAccount('JPN Main', 'jpn-city', 'cityjpn', true);
+        $this->bindInstagramWorker($this->readyWorkerState('jpn-city', 'proxy'));
 
-        $result = app(InstagramAccountSessionService::class)->status('jpn-miami');
+        $result = app(InstagramAccountSessionService::class)->status('jpn-city');
 
         $this->assertTrue($result['success']);
         $this->assertTrue($result['data']['connected']);
         $this->assertTrue($result['data']['account_verified']);
         $this->assertSame('proxy', $result['data']['transport']);
-        $this->assertSame('miamijpn', $result['data']['expected_username']);
+        $this->assertSame('cityjpn', $result['data']['expected_username']);
     }
 
     public function test_connection_rejects_a_valid_session_for_the_wrong_account(): void
     {
-        app(InstagramConfigRepository::class)->saveAccount('JPN Main', 'jpn-miami', 'miamijpn', true);
-        $state = $this->readyWorkerState('jpn-miami', 'direct');
+        app(InstagramConfigRepository::class)->saveAccount('JPN Main', 'jpn-city', 'cityjpn', true);
+        $state = $this->readyWorkerState('jpn-city', 'direct');
         $state['expected_account_binding_verified'] = false;
         $this->bindInstagramWorker($state);
 
-        $result = app(InstagramAccountSessionService::class)->status('jpn-miami');
+        $result = app(InstagramAccountSessionService::class)->status('jpn-city');
 
         $this->assertFalse($result['success']);
         $this->assertFalse($result['data']['connected']);
@@ -69,13 +69,13 @@ trait TestsInstagramAccountSessions
 
     public function test_connection_rejects_missing_account_evidence_configuration(): void
     {
-        app(InstagramConfigRepository::class)->saveAccount('JPN Main', 'jpn-miami', 'miamijpn', true);
-        $state = $this->readyWorkerState('jpn-miami', 'direct');
+        app(InstagramConfigRepository::class)->saveAccount('JPN Main', 'jpn-city', 'cityjpn', true);
+        $state = $this->readyWorkerState('jpn-city', 'direct');
         $state['account_evidence_configured'] = false;
         $state['account_evidence_verified'] = false;
         $this->bindInstagramWorker($state);
 
-        $result = app(InstagramAccountSessionService::class)->status('jpn-miami');
+        $result = app(InstagramAccountSessionService::class)->status('jpn-city');
 
         $this->assertFalse($result['success']);
         $this->assertStringContainsString('account-bound evidence is not configured', $result['detail']);
