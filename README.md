@@ -12,6 +12,8 @@ Dedicated Instagram package for Hexa.
 
 ## Website profiles
 
+Each website profile includes its own saved Instagram scanner list, current account count and exact list/scanner URLs. The source owner supplies this mapping, with no copied membership list.
+
 - Dashboard: `/instagram/profiles`, with a selected profile at `?id=<id>`.
 - A profile stores its own name, website source/key, notes, last successful catalog and refresh error in `instagram_profiles`.
 - Website facts remain with the website owner. The Instagram package does not import JPN models or duplicate city settings.

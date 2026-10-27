@@ -57,6 +57,19 @@
                 </div>
                 @if($profile['console_url'])<a class="igp-button" href="{{ $profile['console_url'] }}">Open desktop ↗</a>@else<span class="igp-pill igp-pill-amber">Desktop not registered</span>@endif
             </div>
+            <div class="igp-desktop" style="margin-top:14px">
+                <div><strong>Instagram scanner list</strong>
+                    @if($profile['instagram_list'])
+                        <p class="igp-muted">{{ $profile['instagram_list']['name'] }} · {{ $profile['instagram_list']['accounts_count'] }} saved accounts</p>
+                    @else
+                        <p class="igp-muted">No Instagram list is assigned to this website.</p>
+                    @endif
+                </div>
+                <div class="igp-host-links">
+                    @if($profile['instagram_list'])<a class="igp-button" href="{{ $profile['instagram_list']['url'] }}">Open this list ↗</a>@endif
+                    @if($profile['scanner_url'])<a class="igp-button" href="{{ $profile['scanner_url'] }}">Open scanner ↗</a>@endif
+                </div>
+            </div>
             @if($profile['paused'])<div class="igp-notice igp-warning">Automation is paused for this desktop. Website refreshes remain available.</div>@endif
             @if(!$profile['source_available'])<div class="igp-notice igp-warning">The linked website record is unavailable. Restore it before refreshing this profile.</div>@endif
             <details class="igp-notes"><summary>Profile notes and name</summary>

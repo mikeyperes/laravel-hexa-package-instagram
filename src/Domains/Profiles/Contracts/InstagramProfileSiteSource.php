@@ -9,7 +9,9 @@ interface InstagramProfileSiteSource
 
     /**
      * Safe website descriptors: key, name, site_url, instagram_username,
-     * browser_profile, region and timezone. No credentials or browser state.
+     * browser_profile, region and timezone. Optional instagram_list contains its
+     * own id, name, accounts_count and exact URL; scanner_url opens the scanner.
+     * No credentials or browser state.
      */
     public function sites(): array;
 

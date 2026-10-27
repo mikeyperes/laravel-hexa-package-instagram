@@ -72,6 +72,8 @@ class InstagramProfileRegistry
                 'site_url' => $site['site_url'] ?? null,
                 'region' => $site['region'] ?? '', 'timezone' => $site['timezone'] ?? '',
                 'instagram_username' => $site['instagram_username'] ?? '',
+                'instagram_list' => $site['instagram_list'] ?? null,
+                'scanner_url' => $site['scanner_url'] ?? null,
                 'browser_profile' => $browser,
                 'console_url' => $session['console_url'] ?? null,
                 'desktop_registered' => $session !== null,

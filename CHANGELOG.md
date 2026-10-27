@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.18.1 - 2026-10-27
+
+- Link each profile to its own saved Instagram scanner list, with its current name and account count.
+
 ## 1.18.0 - 2026-10-27
 
 - Add named website profiles, a responsive dashboard, profile creation/notes, searchable locations and hosts, and saved complete website catalogs.
