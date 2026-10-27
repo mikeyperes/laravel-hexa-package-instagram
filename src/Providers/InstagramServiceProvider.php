@@ -17,6 +17,15 @@ class InstagramServiceProvider extends ServiceProvider
         $this->mergeConfigFrom(__DIR__.'/../../config/instagram.php', 'instagram');
 
         $this->app->singleton(InstagramConfigRepository::class);
+        $this->app->scoped(\hexa_package_instagram\Domains\Profiles\Services\InstagramProfileRegistry::class, function ($app) {
+            return new \hexa_package_instagram\Domains\Profiles\Services\InstagramProfileRegistry(
+                $app->tagged('instagram.profile-sources'),
+                $app->make(InstagramConfigRepository::class),
+                $app->make(\hexa_package_browser_worker\Contracts\BrowserSessionRegistryContract::class),
+                $app->make(\hexa_package_browser_worker\Contracts\BrowserWorkerBridgeContract::class),
+            );
+        });
+
         $this->app->singleton(InstagramImportService::class);
         $this->app->singleton(InstagramScraperService::class);
         $this->app->singleton(\hexa_package_instagram\Services\InstagramFollowAuditService::class);
@@ -42,7 +51,10 @@ class InstagramServiceProvider extends ServiceProvider
         $this->registerDocs();
 
         if ($this->app->runningInConsole()) {
-            $this->commands([\hexa_package_instagram\Console\InstagramFollowAuditCommand::class, \hexa_package_instagram\Console\InstagramFollowCommand::class,
+            $this->commands([
+                \hexa_package_instagram\Domains\Profiles\Console\InstagramProfilesCommand::class,
+                \hexa_package_instagram\Domains\Profiles\Console\SaveInstagramProfileCommand::class,
+                \hexa_package_instagram\Console\InstagramFollowAuditCommand::class, \hexa_package_instagram\Console\InstagramFollowCommand::class,
                 \hexa_package_instagram\Console\InstagramPublishCommand::class,
                 \hexa_package_instagram\Console\InstagramExtractUsernamesCommand::class,
                 \hexa_package_instagram\Console\InstagramUnpublishCommand::class,
@@ -77,6 +89,7 @@ class InstagramServiceProvider extends ServiceProvider
                 $registry->registerDomainGroup('Automation', $domainIcon, 83);
                 $registry->registerSectionGroup('Instagram', 'Automation', $sectionIcon, 86);
                 $registry->registerSidebarLink('instagram.index', 'Instagram', $homeIcon, 'Instagram', 'instagram', 70);
+                $registry->registerSidebarLink('instagram.profiles.index', 'Profiles', $accountsIcon, 'Instagram', 'instagram', 70);
                 $registry->registerSidebarLink('instagram.accounts', 'Accounts', $accountsIcon, 'Instagram', 'instagram', 71);
                 $registry->registerSidebarLink('instagram.raw', 'Raw Workspace', $rawIcon, 'Instagram', 'instagram', 72);
                 $registry->registerSidebarLink('settings.instagram', 'Settings', $settingsIcon, 'Instagram', 'instagram', 73);
@@ -132,11 +145,11 @@ class InstagramServiceProvider extends ServiceProvider
             app($docsClass)->register('instagram', 'Instagram', 'hexawebsystems/laravel-hexa-package-instagram', [
                 [
                     'title' => 'Overview',
-                    'content' => '<p>Instagram browser-account attach, connection testing, raw profile/story scraping, and public post import for Hexa apps.</p>',
+                    'content' => '<p>Website profiles link each Instagram account to its city website and existing browser desktop. Open Profiles to refresh locations and hosts from the website. Instagram browser-account attach, connection testing, raw profile/story scraping, and public post import for Hexa apps.</p>',
                 ],
                 [
                     'title' => 'Main Flow',
-                    'content' => '<p>Save the optional Meta oEmbed token, attach one or more Instagram accounts on the Accounts page, log in with the saved account credentials, run the full connection test, and use Raw Workspace for profile, story, and post checks.</p>',
+                    'content' => '<p>Open Profiles to link a website to its Instagram account and browser desktop. Refresh locations and hosts from the website. Browser Console manages sign-in and the network connection. Accounts and Raw Workspace provide account bindings and diagnostics.</p>',
                 ],
             ]);
         } catch (\Throwable $e) {

@@ -12,6 +12,10 @@ Route::middleware(['web', 'auth', 'locked', 'system_lock', 'two_factor', 'role']
     Route::post('/settings/instagram/test-meta-token', [InstagramSettingsController::class, 'testMetaToken'])->name('settings.instagram.test-meta-token');
 
     Route::get('/instagram', [InstagramWorkspaceController::class, 'index'])->name('instagram.index');
+    Route::get('/instagram/profiles', [\hexa_package_instagram\Domains\Profiles\Http\Controllers\InstagramProfilesController::class, 'index'])->name('instagram.profiles.index');
+    Route::post('/instagram/profiles', [\hexa_package_instagram\Domains\Profiles\Http\Controllers\InstagramProfilesController::class, 'store'])->name('instagram.profiles.store');
+    Route::post('/instagram/profiles/{profile}/refresh', [\hexa_package_instagram\Domains\Profiles\Http\Controllers\InstagramProfilesController::class, 'refresh'])->whereNumber('profile')->name('instagram.profiles.refresh');
+
     Route::get('/instagram/accounts', [InstagramAccountsController::class, 'index'])->name('instagram.accounts');
     Route::post('/instagram/accounts', [InstagramAccountsController::class, 'store'])->name('instagram.accounts.store');
     Route::post('/instagram/accounts/activate', [InstagramAccountsController::class, 'activate'])->name('instagram.accounts.activate');

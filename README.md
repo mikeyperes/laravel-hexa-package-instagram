@@ -4,18 +4,51 @@ Dedicated Instagram package for Hexa.
 
 ## Main flow
 
-1. Open **Accounts** and save one or more Instagram browser profiles with usernames and passwords.
-2. Click **Log in with saved credentials** on the account you want to attach.
-3. Open **Settings** and save the default usernames plus the optional Meta oEmbed token.
-4. Run the **Full Connection Test** to confirm the active browser profile is really authenticated.
-5. Use **Raw Workspace** to test profile scans, story pulls, public post import, and worker logs.
+1. Open **Profiles** to create a named workspace linked to a registered website.
+2. The website owner supplies its current Instagram username, browser desktop, region and timezone.
+3. Click **Refresh from website** to save the complete current location and host lists.
+4. Open the exact desktop in **Browser Console** to manage Instagram login and its network connection.
+5. **Accounts**, **Settings** and **Raw Workspace** retain the existing account and diagnostic tools.
+
+## Website profiles
+
+- Dashboard: `/instagram/profiles`, with a selected profile at `?id=<id>`.
+- A profile stores its own name, website source/key, notes, last successful catalog and refresh error in `instagram_profiles`.
+- Website facts remain with the website owner. The Instagram package does not import JPN models or duplicate city settings.
+- Each source implements `InstagramProfileSiteSource` and is tagged `instagram.profile-sources`. JPN registers its city adapter.
+- Locations are the website's saved area/location registry. Hosts include the public author page, public website, Instagram handle and location when available.
+- Refreshes read the complete website registry, including all host pages. Failure preserves the previous successful snapshot and its timestamp; empty successful lists remain explicitly empty.
+- A website URL change hides the previous site's snapshot until a successful refresh.
+- Browser assignments come from the website record and link through the trusted session registry. Profile names and desktop names are independent.
+- Login and proxy/VPN providers remain owned by Browser Console and the shared transport packages. No provider-specific credentials or Decodo integration are added.
+- Creating a profile saves a missing account binding, preserves the active account, and refuses a desktop already bound to a different Instagram username.
+- This dashboard never follows an account, posts, launches a desktop, verifies a login or changes a network route.
+
+### Commands
+
+```bash
+php artisan instagram:profile-save <profile-name> <website-source> <website-record-key> [--notes="..."]
+php artisan instagram:profiles [--profile=<profile-name>]
+php artisan instagram:profiles [--profile=<profile-name>] --refresh
+```
+
+The default listing is read-only and emits safe JSON including saved catalogs. `--refresh` reads the website and replaces its successful snapshot.
 
 ## Included surfaces
 
 - `/instagram`
+- `/instagram/profiles`
 - `/instagram/accounts`
 - `/settings/instagram`
 - `/instagram/raw`
+
+## Storage and dependencies
+
+- `instagram_profiles`: unique name and website source/key, notes, catalog JSON, successful sync time and last error.
+- `instagram_publications`: existing publication tracking.
+- Account bindings and package defaults remain in Hexa Core settings.
+- Browser Worker supplies the sanitized session registry; Browser Console owns sign-in and routing; website packages supply their own catalog adapters.
+- Install only this package's profile migration when upgrading an existing app. The service provider loads the migration, views, routes, commands, documentation and sidebar entry.
 
 ## Reading recent posts fast
 
