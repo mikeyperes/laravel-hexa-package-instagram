@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.19.0 - 2026-11-01
+
+- New `instagram:post <link or id>`: one post or reel, every slide, the caption and the comments. Logged in through `--profile` (media and comment data, up to `--comments`, 20); `--logged-out` reads the public embed through the public reader profile, with only the comments the embed carries. Service method `InstagramScraperService::readPost()`.
+- The public post read (`publicPostSlides()`) also returns the owner's name, location, like and comment counts, embed comments and each video slide's address.
+
 ## 1.18.1 - 2026-10-27
 
 - Link each profile to its own saved Instagram scanner list, with its current name and account count.

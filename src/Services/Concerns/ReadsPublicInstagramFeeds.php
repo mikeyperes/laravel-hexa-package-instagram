@@ -378,11 +378,17 @@ return (async () => {
       const nodes = edges.length ? edges.map((edge) => edge?.node || {}) : [media];
       posts.push({
         code, ok: true, status,
-        owner: media.owner?.username || '',
+        owner: media.owner?.username || '', owner_name: media.owner?.full_name || '',
         caption: media.edge_media_to_caption?.edges?.[0]?.node?.text || '',
         posted_at: media.taken_at_timestamp ? new Date(media.taken_at_timestamp * 1000).toISOString() : '',
+        location: media.location?.name || '',
+        like_count: media.edge_media_preview_like?.count ?? media.edge_liked_by?.count ?? null,
+        comment_count: (media.edge_media_to_parent_comment || media.edge_media_to_comment || media.edge_media_preview_comment)?.count ?? null,
+        // Only the comments Instagram puts in the embed (often none).
+        comments: ((media.edge_media_to_parent_comment || media.edge_media_preview_comment || media.edge_media_to_comment)?.edges || [])
+          .map((edge) => edge?.node || {}).map((c) => ({ owner: c.owner?.username || '', text: c.text || '', created_at: c.created_at || 0, likes: c.edge_liked_by?.count || 0 })),
         is_carousel: edges.length > 1,
-        slides: nodes.map((node, index) => ({ index: index + 1, is_video: !!node.is_video, image_url: largest(node.display_resources) || node.display_url || '' })),
+        slides: nodes.map((node, index) => ({ index: index + 1, is_video: !!node.is_video, image_url: largest(node.display_resources) || node.display_url || '', video_url: node.video_url || '' })),
       });
     } catch (error) {
       posts.push({ code, ok: false, status, error: String(error).slice(0, 200) });

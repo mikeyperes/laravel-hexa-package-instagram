@@ -82,7 +82,15 @@ Any caller reads one account through one explicit logged-in browser profile; the
 ```bash
 php artisan instagram:posts <account> --profile=<profile> [--limit=5] [--allow-public-fallback] [--json]
 php artisan instagram:stories <account> --profile=<profile> [--owner-lookups=10] [--json]
+php artisan instagram:post <link or id> (--profile=<profile> | --logged-out) [--comments=20] [--json]
 ```
+
+- `instagram:post` → `{success, message, mode (logged_in|logged_out), profile, post: {code, pk, url, owner, owner_name,
+  taken_at, caption, location, like_count, comment_count, slides: [{index, is_video, image_url, video_url}], comments:
+  [{owner, text, created_at, likes}], comments_complete}, errors}` through `readPost()`. Logged in, it passes the same
+  read gate and reads Instagram's media and comment data (up to `--comments`, 0-50). `--logged-out` reads the post's
+  public embed through `instagram.public_reader_profile` (or `--profile`); the embed carries few or no comments, so
+  `comments_complete` is false.
 
 - Both first pass `InstagramConnectionService::readGate($profile)` and stop with its exact reason when the profile is
   paused (`browser_worker_paused_profiles`), its Browser Console runtime needs activation, Instagram is not logged in,

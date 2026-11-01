@@ -13,6 +13,7 @@ class InstagramScraperService
     use \hexa_package_instagram\Services\Concerns\ReadsPublicInstagramFeeds;
     use \hexa_package_instagram\Services\Concerns\ReadsInstagramAccounts;
     use \hexa_package_instagram\Services\Concerns\ReadsInstagramAccountActivity;
+    use \hexa_package_instagram\Services\Concerns\ReadsInstagramPost;
     use \hexa_package_instagram\Services\Concerns\PublishesInstagramMedia;
     use \hexa_package_instagram\Services\Concerns\ManagesInstagramHighlights;
 
