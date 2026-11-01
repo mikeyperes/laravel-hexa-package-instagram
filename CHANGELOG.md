@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.20.0 (2026-11-01)
+
+- Phase 1 action engine: explicit sessions, shared Human Behavior limits, persistent JSON results, post output parts, links-only account posts, profiles and classified tags. Legacy reader transport and Browser Worker failure distinctions preserved. Test doubles now receive BrowserProxyConfigWriter.
+
 ## 1.19.1 - 2026-11-01
 
 - Account checks (`InstagramFollowAuditService`) hand the judge each post's full caption (up to Instagram's 2,200 characters, was 600) and its slide count (`media_count`).

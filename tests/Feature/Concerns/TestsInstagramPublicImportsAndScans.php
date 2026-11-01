@@ -19,7 +19,7 @@ trait TestsInstagramPublicImportsAndScans
 
     public function test_public_import_fallback_extracts_image_caption_and_title(): void
     {
-        app()->instance(BrowserHttpService::class, new class extends BrowserHttpService {
+        app()->instance(BrowserHttpService::class, new class(app(\hexa_package_browser_worker\Services\BrowserProxyConfigWriter::class)) extends BrowserHttpService {
             public function getHtml(string $url, array $options = []): array
             {
                 if (str_contains($url, '/embed/captioned/')) {
@@ -58,7 +58,7 @@ trait TestsInstagramPublicImportsAndScans
 
     public function test_public_import_accepts_profile_scoped_post_url(): void
     {
-        app()->instance(BrowserHttpService::class, new class extends BrowserHttpService {
+        app()->instance(BrowserHttpService::class, new class(app(\hexa_package_browser_worker\Services\BrowserProxyConfigWriter::class)) extends BrowserHttpService {
             public function getHtml(string $url, array $options = []): array
             {
                 if (str_contains($url, '/embed/captioned/')) {

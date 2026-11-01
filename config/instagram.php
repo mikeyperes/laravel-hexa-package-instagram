@@ -1,8 +1,13 @@
 <?php
 
 return [
+    'account_types' => [
+        'event_venue' => ['event venue', 'nightclub', 'eventbrite.', 'partiful.', 'posh.vip', 'concert hall'],
+        'company' => ['company', 'brand', 'business', 'organization', 'restaurant'],
+        'person' => ['personal blog', 'public figure', 'artist', 'musician', 'journalist'],
+    ],
     'enabled' => env('INSTAGRAM_ENABLED', true),
-    'version' => '1.19.1',
+    'version' => '1.20.0',
     // Account discovery through another account's following list or stories (InstagramFollowAuditService).
     'follow_audit' => [
         'model' => env('INSTAGRAM_FOLLOW_AUDIT_MODEL', 'claude-haiku-4-5-20251001'),

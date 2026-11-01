@@ -26,6 +26,7 @@ class InstagramServiceProvider extends ServiceProvider
             );
         });
 
+        $this->app->singleton(\hexa_package_instagram\Actions\ActionRegistry::class);
         $this->app->singleton(InstagramImportService::class);
         $this->app->singleton(InstagramScraperService::class);
         $this->app->singleton(\hexa_package_instagram\Services\InstagramFollowAuditService::class);
@@ -63,6 +64,9 @@ class InstagramServiceProvider extends ServiceProvider
                 \hexa_package_instagram\Console\InstagramPublicationsCommand::class,
                 \hexa_package_instagram\Console\InstagramPostsCommand::class,
                 \hexa_package_instagram\Console\InstagramPostCommand::class,
+                \hexa_package_instagram\Console\InstagramActionsCommand::class,
+                \hexa_package_instagram\Console\InstagramProfileCommand::class,
+                \hexa_package_instagram\Console\InstagramTaggedAccountsCommand::class,
                 \hexa_package_instagram\Console\InstagramStoriesCommand::class,
             ]);
         }

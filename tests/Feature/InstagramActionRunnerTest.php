@@ -1,0 +1,68 @@
+<?php
+namespace Tests\Feature;
+use Tests\TestCase;
+use Illuminate\Support\Facades\{Schema,DB};
+use Illuminate\Database\Schema\Blueprint;
+use hexa_package_instagram\Actions\{ActionRunner,ActionRequest,Mode,ActionRegistry};
+use hexa_package_instagram\Services\InstagramScraperService;
+use hexa_package_browser_worker\Contracts\BrowserSessionRegistryContract;
+use hexa_package_instagram\Actions\Support\SessionActor;
+use hexa_package_human_behavior\Limits\Limiter;
+final class InstagramActionRunnerTest extends TestCase
+{
+    protected function setUp(): void {
+        parent::setUp();
+        Schema::create('settings',function(Blueprint $t){$t->id();$t->string('key')->unique();$t->text('value')->nullable();$t->string('group')->nullable();$t->timestamps();});
+        (require base_path('packages/hexawebsystems/laravel-hexa-package-instagram/database/migrations/2026_11_01_172000_create_instagram_action_results.php'))->up();
+        (require base_path('packages/hexawebsystems/laravel-hexa-package-human-behavior/database/migrations/2026_10_30_000001_create_human_behavior_actions_table.php'))->up();
+        Schema::create('social_automation_devices',function(Blueprint $t){$t->id();$t->string('profile');$t->timestamp('paired_at')->nullable();$t->timestamp('cooldown_until')->nullable();$t->string('cooldown_reason')->nullable();$t->timestamps();});
+        $sessions=$this->createMock(BrowserSessionRegistryContract::class);$sessions->method('all')->willReturn([['profile_id'=>'instagram-public']]);$this->app->instance(BrowserSessionRegistryContract::class,$sessions);
+    }
+    public function test_read_filters_parts_persists_and_counts_shared_session(): void {
+        $reader=$this->createMock(InstagramScraperService::class);$reader->expects($this->once())->method('readPost')->willReturn(['success'=>true,'post'=>['caption'=>'Hello','owner'=>'test','slides'=>[]]]);$this->app->instance(InstagramScraperService::class,$reader);
+        $r=app(ActionRunner::class)->run('read_post',new ActionRequest('instagram-public',['ABCDEF'],only:['caption'],campaignId:10));
+        $this->assertTrue($r->success);$this->assertSame(['caption'=>'Hello'],$r->records[0]->evidence);
+        $this->assertSame(1,DB::table('instagram_action_results')->count());
+        $this->assertSame(1,app(Limiter::class)->status(new SessionActor('instagram-public'),'retrieve_post')['hour_used']);
+        $again=app(ActionRunner::class)->run('read_post',new ActionRequest('instagram-public',['ABCDEF'],only:['caption'],campaignId:10));
+        $this->assertSame('skipped',$again->records[0]->outcome);$this->assertSame(1,DB::table('human_behavior_actions')->count());
+    }
+    public function test_unknown_session_and_part_and_unavailable_mode_refuse_before_transport(): void {
+        foreach ([new ActionRequest('missing',['ABCDEF']),new ActionRequest('instagram-public',['ABCDEF'],only:['secret']),new ActionRequest('instagram-public',['ABCDEF'],Mode::Human)] as $request) {
+            $r=app(ActionRunner::class)->run('read_post',$request);$this->assertFalse($r->success);$this->assertNotEmpty($r->errors);
+        }
+        $this->assertSame(0,DB::table('human_behavior_actions')->count());
+    }
+    public function test_exhausted_limit_refuses_with_wait_and_no_transport(): void {
+        $reader=$this->createMock(InstagramScraperService::class);$reader->expects($this->never())->method('readPost');$this->app->instance(InstagramScraperService::class,$reader);
+        app(\hexa_package_human_behavior\Limits\LimitRegistry::class)->register('retrieve_post','Post',0,0);
+        $r=app(ActionRunner::class)->run('read_post',new ActionRequest('instagram-public',['ABCDEF']));
+        $this->assertSame('limit_exhausted',$r->stop);$this->assertGreaterThan(0,$r->errors[0]['wait_seconds']);
+    }
+
+    public function test_all_foundation_actions_declare_both_modes_and_routes_from_config(): void {
+        $rows=app(ActionRegistry::class)->list();$this->assertCount(4,$rows);
+        foreach($rows as $row){$this->assertSame(['efficient','human'],$row['modes']);$this->assertNotEmpty($row['process_key']);$this->assertNotEmpty($row['routes']);$this->assertSame(config('social-automation.action_routes.'.$row['key']),$row['routes']);}
+        $this->assertContains('tagged_accounts',app(ActionRegistry::class)->get('read_post')->parts());
+    }
+    public function test_profile_posts_and_tagged_accounts_use_same_limits_and_result_contract(): void {
+        $reader=$this->createMock(InstagramScraperService::class);
+        $reader->method('publicProfileFeeds')->willReturn(['success'=>true,'data'=>['accounts'=>['test'=>['success'=>true,'posts'=>[['url'=>'https://www.instagram.com/p/ABCDEF/','shortcode'=>'ABCDEF','caption'=>'must not leak','pinned'=>true]]]]]]);
+        $reader->method('readPost')->willReturn(['success'=>true,'post'=>['tagged'=>['test'],'mentions'=>[],'coauthors'=>[]]]);
+        $this->app->instance(InstagramScraperService::class,$reader);
+        foreach(['read_profile','read_account_posts','read_tagged_accounts'] as $key){
+            DB::table('instagram_action_results')->delete();
+            $r=app(ActionRunner::class)->run($key,new ActionRequest('instagram-public',['test'],options:['classify'=>false]));
+            $this->assertTrue($r->success,json_encode($r));$this->assertSame('done',$r->records[0]->outcome);
+            $this->assertSame(1,DB::table('instagram_action_results')->count());
+            if($key==='read_account_posts')$this->assertArrayNotHasKey('caption',$r->records[0]->evidence['posts'][0]);
+            if($key==='read_tagged_accounts')$this->assertSame(['test'],$r->records[0]->evidence['tagged_accounts']);
+        }
+    }
+    public function test_stop_signal_is_counted_and_persisted_without_inventing_routes(): void {
+        $reader=$this->createMock(InstagramScraperService::class);$reader->method('readPost')->willReturn(['success'=>false,'message'=>'Rate limited by Instagram.']);$this->app->instance(InstagramScraperService::class,$reader);
+        $r=app(ActionRunner::class)->run('read_post',new ActionRequest('instagram-public',['ABCDEF','GHIJKL']));
+        $this->assertSame('rate_limited',$r->stop);$this->assertCount(1,$r->records);$this->assertSame([],$r->routes);
+        $this->assertSame(1,DB::table('human_behavior_actions')->count());$this->assertNotNull(DB::table('social_automation_devices')->value('cooldown_until'));
+    }
+}

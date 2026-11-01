@@ -130,6 +130,9 @@ trait ReadsInstagramPost
                 'likes' => (int) ($comment['likes'] ?? 0),
             ], array_filter($comments, 'is_array'))),
             'comments_complete' => $complete,
+            'tagged' => array_values(array_unique((array) ($item['tagged'] ?? []))),
+            'mentions' => array_values(array_unique((array) ($item['mentions'] ?? []))),
+            'coauthors' => array_values(array_unique((array) ($item['coauthors'] ?? []))),
         ];
     }
 
@@ -151,6 +154,9 @@ trait ReadsInstagramPost
     owner: node.user?.username || '', owner_name: node.user?.full_name || '',
     taken_at: node.taken_at || 0, caption: node.caption?.text || '', location: node.location?.name || '',
     like_count: node.like_count ?? null, comment_count: node.comment_count ?? null,
+    tagged: [...new Set([node, ...children].flatMap(m => (m.usertags?.in || []).map(t => t.user?.username).filter(Boolean)))],
+    mentions: [...new Set([...(node.caption?.text || '').matchAll(/@([A-Za-z0-9._]{1,30})/g)].map(m => m[1].toLowerCase()))],
+    coauthors: (node.coauthor_producers || []).map(u => u.username).filter(Boolean),
     slides: (children.length ? children : [node]).map((media, index) => ({ index: index + 1, is_video: isVideo(media),
       image_url: largest(media.image_versions2?.candidates), video_url: isVideo(media) ? ((media.video_versions || [])[0]?.url || '') : '' })),
   };

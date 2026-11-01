@@ -1,48 +1,19 @@
 <?php
-
 namespace hexa_package_instagram\Console;
-
-use hexa_package_instagram\Services\InstagramScraperService;
+use hexa_package_instagram\Actions\{ActionRunner,ActionRequest,Mode};
 use Illuminate\Console\Command;
-
-class InstagramPostsCommand extends Command
+final class InstagramPostsCommand extends Command
 {
-    protected $signature = 'instagram:posts
-        {account : Instagram username (@name, name or profile link)}
-        {--profile= : Logged-in browser profile to read with (required)}
-        {--limit=5 : Newest posts to read (1-12)}
-        {--allow-public-fallback : When the logged-in read of this account fails, read its public profile embed instead}
-        {--json : Print the full result as JSON}';
-
-    protected $description = 'Read one Instagram account\'s newest posts through one logged-in browser profile. Read-only; stops with the reason when the profile is paused, not activated, not logged in or has no protected route.';
-
-    public function handle(InstagramScraperService $instagram): int
-    {
-        $profile = trim((string) $this->option('profile'));
-        if ($profile === '') {
-            $this->error('--profile is required: name the logged-in browser profile to read with.');
-
-            return self::INVALID;
-        }
-        $result = $instagram->accountPosts($profile, (string) $this->argument('account'), (int) $this->option('limit'), (bool) $this->option('allow-public-fallback'));
-        if ($this->option('json')) {
-            $this->line(json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
-
-            return $result['success'] ? self::SUCCESS : self::FAILURE;
-        }
-        if (! $result['success']) {
-            $this->error($result['message']);
-
-            return self::FAILURE;
-        }
-        $this->line('@'.$result['account'].' · '.$result['profile'].' · '.$result['posts_source'].' · '.$result['message']);
-        foreach ($result['posts'] as $post) {
-            $this->line($post['taken_at'].' '.$post['url'].($post['video'] ? ' (video)' : '').' — '.mb_substr(str_replace("\n", ' ', $post['caption']), 0, 100));
-        }
-        foreach ($result['errors'] as $error) {
-            $this->warn($error);
-        }
-
-        return self::SUCCESS;
+    protected $signature = 'instagram:posts {account} {--profile=} {--mode=efficient} {--only=} {--skip=} {--campaign=} {--json} {--limit=5} {--allow-public-fallback}';
+    protected $description = 'Run read_account_posts through the shared Instagram action runner.';
+    public function handle(ActionRunner $runner): int {
+        $session = (string)$this->option('profile');
+        
+        $mode = Mode::tryFrom((string)$this->option('mode'));
+        if (!$mode) { $this->line(json_encode(['success'=>false,'action'=>'read_account_posts','mode'=>$this->option('mode'),'session'=>$session,'records'=>[],'errors'=>['Unknown mode.'],'stop'=>null,'routes'=>[]])); return self::INVALID; }
+        $split = fn ($v) => array_values(array_filter(array_map('trim',explode(',',(string)$v))));
+        $options = ['limit'=>(int)$this->option('limit')];
+        $result = $runner->run('read_account_posts',new ActionRequest($session,[(string)$this->argument('account')],$mode,$split($this->option('only')),$split($this->option('skip')),null,$this->option('campaign') ? (int)$this->option('campaign') : null, [], $options));
+        $this->line(json_encode($result,JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE)); return $result->success ? self::SUCCESS : self::FAILURE;
     }
 }

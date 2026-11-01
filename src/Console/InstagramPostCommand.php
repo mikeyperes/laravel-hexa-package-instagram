@@ -1,47 +1,19 @@
 <?php
-
 namespace hexa_package_instagram\Console;
-
-use hexa_package_instagram\Services\InstagramScraperService;
+use hexa_package_instagram\Actions\{ActionRunner,ActionRequest,Mode};
 use Illuminate\Console\Command;
-
-class InstagramPostCommand extends Command
+final class InstagramPostCommand extends Command
 {
-    protected $signature = 'instagram:post
-        {post : Post or reel link, or its short id (the part after /p/ or /reel/)}
-        {--profile= : Logged-in browser profile to read with (logged out: defaults to the public reader)}
-        {--logged-out : Read the public embed instead, without any account (comments are partial or none)}
-        {--comments=20 : Comments to read when logged in (0-50)}
-        {--json : Print the full result as JSON}';
-
-    protected $description = 'Read one Instagram post or reel by its link or short id: every slide, the caption and the comments, logged in or logged out. Read-only.';
-
-    public function handle(InstagramScraperService $instagram): int
-    {
-        $result = $instagram->readPost((string) $this->argument('post'), $this->option('profile'), (bool) $this->option('logged-out'), (int) $this->option('comments'));
-        if ($this->option('json')) {
-            $this->line(json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
-
-            return $result['success'] ? self::SUCCESS : self::FAILURE;
-        }
-        if (! $result['success']) {
-            $this->error($result['message']);
-
-            return self::FAILURE;
-        }
-        $post = $result['post'];
-        $this->line($post['url'].' · '.$result['profile'].' · '.$result['message']);
-        $this->line($post['taken_at'].' — '.mb_substr(str_replace("\n", ' ', $post['caption']), 0, 200));
-        foreach ($post['slides'] as $slide) {
-            $this->line('  slide '.$slide['index'].($slide['is_video'] ? ' (video)' : '').': '.$slide['image_url']);
-        }
-        foreach ($post['comments'] as $comment) {
-            $this->line('  @'.$comment['owner'].': '.mb_substr(str_replace("\n", ' ', $comment['text']), 0, 140));
-        }
-        foreach ($result['errors'] as $error) {
-            $this->warn($error);
-        }
-
-        return self::SUCCESS;
+    protected $signature = 'instagram:post {post} {--profile=} {--mode=efficient} {--only=} {--skip=} {--campaign=} {--json} {--logged-out} {--comments=20}';
+    protected $description = 'Run read_post through the shared Instagram action runner.';
+    public function handle(ActionRunner $runner): int {
+        $session = (string)$this->option('profile');
+        if ($this->option('logged-out') && $session === '') $session = (string)config('instagram.public_reader_profile','instagram-public');
+        $mode = Mode::tryFrom((string)$this->option('mode'));
+        if (!$mode) { $this->line(json_encode(['success'=>false,'action'=>'read_post','mode'=>$this->option('mode'),'session'=>$session,'records'=>[],'errors'=>['Unknown mode.'],'stop'=>null,'routes'=>[]])); return self::INVALID; }
+        $split = fn ($v) => array_values(array_filter(array_map('trim',explode(',',(string)$v))));
+        $options = ['comments'=>(int)$this->option('comments')];
+        $result = $runner->run('read_post',new ActionRequest($session,[(string)$this->argument('post')],$mode,$split($this->option('only')),$split($this->option('skip')),null,$this->option('campaign') ? (int)$this->option('campaign') : null, [], $options));
+        $this->line(json_encode($result,JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE)); return $result->success ? self::SUCCESS : self::FAILURE;
     }
 }

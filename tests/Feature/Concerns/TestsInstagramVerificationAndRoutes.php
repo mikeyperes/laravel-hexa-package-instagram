@@ -131,7 +131,7 @@ trait TestsInstagramVerificationAndRoutes
         app()->forgetInstance(InstagramConnectionService::class);
         app()->forgetInstance(InstagramAccountSessionService::class);
 
-        app()->instance(BrowserHttpService::class, new class extends BrowserHttpService
+        app()->instance(BrowserHttpService::class, new class(app(\hexa_package_browser_worker\Services\BrowserProxyConfigWriter::class)) extends BrowserHttpService
         {
             public function getHtml(string $url, array $options = []): array
             {

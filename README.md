@@ -144,3 +144,19 @@ This package owns:
 - the shared Instagram post import service used by other packages
 
 It builds on `laravel-hexa-package-browser-worker` for the generic browser runtime and persistent session handling.
+
+## Instagram engine foundation (2026-11-01)
+
+Phase 1 action engine: explicit sessions, shared Human Behavior limits, persistent JSON results, post output parts, links-only account posts, profiles and classified tags. Legacy reader transport and Browser Worker failure distinctions preserved. Test doubles now receive BrowserProxyConfigWriter.
+
+Commands: `instagram:actions --json`, `instagram:actions --results --action=read_post --profile=SESSION --json`,
+`instagram:post POST --profile=SESSION --mode=efficient --only=caption,slides --json`,
+`instagram:posts ACCOUNT --profile=SESSION --limit=5 --json`, `instagram:profile ACCOUNT --profile=SESSION --json`,
+`instagram:tagged-accounts POST --profile=SESSION --classify=1 --json`.
+All four readers enter `Actions/ActionRunner`; `Transport/BackgroundTransport` retains the existing reader concerns.
+Results are stored in `instagram_action_results`; performed attempts count in Human Behavior using the existing
+`social-automation:SESSION` actor. A request's `context` is opaque. Transport options (`limit`, `comments`, `classify`)
+are explicit `ActionRequest::options`, so callers never encode execution controls in context.
+Skip lists and same-campaign results prevent repeated completed work; fresh reads without a campaign remain fresh.
+The public embed reports limited profile coverage. Legacy readers supply no observed route rows, so results do not invent them.
+Human-mode actions, write approvals, story and direct-message actions remain later phases.

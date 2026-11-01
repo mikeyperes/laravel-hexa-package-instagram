@@ -251,7 +251,7 @@ JS;
     const user = (json?.users || []).map((row) => row.user).find((row) => (row?.username || '').toLowerCase() === username);
     if (!user) { accounts[username] = { success: false, status, message: status === 429 ? 'Rate limited by Instagram.' : 'Account not found in Instagram search.' }; if (status === 429) break; continue; }
     accounts[username] = { success: true, status, user_id: String(user.pk || user.pk_id || user.id || ''), username: user.username, full_name: user.full_name || '',
-      is_private: !!user.is_private, is_verified: !!user.is_verified, biography: '', category: '', external_url: '', followers: null };
+      is_private: !!user.is_private, is_verified: !!user.is_verified, biography: user.biography || '', category: user.category || user.category_name || '', is_business: user.is_business ?? null, is_professional: user.is_professional_account ?? null, external_url: user.external_url || '', followers: user.follower_count ?? null };
   }
   return { text: JSON.stringify({ accounts }) };
 JS;
