@@ -96,3 +96,9 @@
 - Cause: direct Browser Worker write methods predated the action runner.
 - Patch: remove the unrestricted follow command/method, refuse legacy background publication and Highlight writes, and route supported writes through receipt-gated human or official API actions.
 - Guard: the action runner validates mode and receipt; the legacy write methods return before dispatch.
+
+## IG-2026-11-01-02 - Preserve failed human evidence across result shaping
+
+- Found: the action lifecycle matrix showed read_account_posts failure diagnostics were discarded when its evidence was reduced to a posts list.
+- Fixed: apply profile/posts shapes and selected-part filtering to successful outcomes only; keep structured errors and page state intact for every failed action. Normalize shared profile/network fields on successful human reads.
+- Proof: final Instagram Feature suite 71 tests, 541 assertions passed. No live write or held post campaign was run.

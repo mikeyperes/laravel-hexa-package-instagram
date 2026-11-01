@@ -185,3 +185,5 @@ Complete the task-action entry point for single/list targets and optional synchr
 `instagram:run ACTION --profile=SESSION --mode=MODE --targets=JSON --options=JSON --skip=JSON --only=PARTS --approval=ID --json [--wait]` submits exactly one action. `instagram:approval --file=ENVELOPE --json` stores only a toolbox-verified receipt. `instagram:publish story|post IMAGE --account=ACCOUNT --profile=SESSION --key=KEY --approval=ID --json` uses the official API owned by the Facebook package. Human upload is not advertised: the existing extension has no supported upload transport.
 
 Publication lists supply options.keys as an exact target-to-stable-key map; keys must be nonempty and distinct. Optional options.captions maps target to caption. These maps remain part of the verified approval binding.
+
+Human failures keep diagnostics before part filtering and successful-output shaping. Human profile and network results include the common username/biography and users/complete fields. Automated verification: 71 Instagram Feature tests, 541 assertions passed.

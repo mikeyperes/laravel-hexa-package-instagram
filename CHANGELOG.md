@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.25.2 - 2026-11-01
+- Final Feature suite: 71 tests, 541 assertions, zero errors.
+- Exercise every efficient read and every human recipe for counting, repeat safety, skip or list inputs, shared stops and highlight minimum gaps.
+- Preserve failure diagnostics for every human action before successful-output shaping or only-part filtering.
+
+
 ## 1.25.1 - 2026-11-01
 - Add table-driven human task lifecycle fixtures for counting, duplicate reports, stop diagnostics and highlight minimum-gap refusal.
 - The new isolated settings schema includes the settings model type field.

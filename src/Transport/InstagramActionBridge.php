@@ -69,9 +69,14 @@ final class InstagramActionBridge implements NetworkActionBridge
         $data=$result;unset($data['routes']);
         if(isset($data['author'])){$data['owner']=$data['author'];unset($data['author']);}
         if(isset($data['tagged'])){$data['tagged_accounts']=$data['tagged'];unset($data['tagged']);}
-        if($action==='read_profile')$data=['profile'=>$data];
-        if($action==='read_account_posts')$data=['posts'=>array_map(fn($p)=>array_intersect_key($p,array_flip(['url','code','pinned'])),(array)($data['posts'] ?? []))];
-        if($only=$campaign->param('only',[]))$data=array_intersect_key($data,array_flip($only));
+        $successful=in_array($outcome,['done','already'],true);
+        if($successful && in_array($action,['read_following','read_followers'],true)){
+            $data['users']=array_map(fn($user)=>$user+['username'=>$user['handle'] ?? $user['username'] ?? ''],(array)($data['accounts'] ?? []));
+            $data['complete']=(bool)($data['reached_end'] ?? false);
+        }
+        if($action==='read_profile' && $successful){$data['username']=$data['handle'] ?? $data['username'] ?? $target;$data['biography']=$data['bio'] ?? $data['biography'] ?? null;$data=['profile'=>$data];}
+        if($action==='read_account_posts' && $successful)$data=['posts'=>array_map(fn($p)=>array_intersect_key($p,array_flip(['url','code','pinned'])),(array)($data['posts'] ?? []))];
+        if($successful && ($only=$campaign->param('only',[])))$data=array_intersect_key($data,array_flip($only));
         $record=new InstagramResult($target,$outcome,$data,now('UTC')->toIso8601String(),'human',$campaign->profile,(array)($result['routes'] ?? []));
         StoredResult::query()->updateOrCreate(['repeat_key'=>hash('sha256','human:'.$campaign->id.':'.$task->id)],['action'=>$action,'session'=>$campaign->profile,'target'=>$target,'mode'=>'human','outcome'=>$outcome,'record'=>$record->jsonSerialize(),'performed_at'=>$record->at]);
         return $record->jsonSerialize();

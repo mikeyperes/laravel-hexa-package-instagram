@@ -218,7 +218,7 @@ final class InstagramActionRunnerTest extends TestCase
         $device=\hexa_package_social_automation\Automation\Devices\Models\Device::create(['profile'=>'instagram-public','status'=>'active','paired_at'=>now()->subMonth()]);
         $service=app(\hexa_package_social_automation\Automation\Campaigns\CampaignService::class);
         // Isolated task lifecycle fixture: no browser, real account, or approval receipt is used.
-        $campaign=$service->create('instagram','instagram-action-'.str_replace('_','-',$key),'instagram-public',['targets'=>$targets,'session'=>'instagram-public','options'=>$options],approvedActions:[$key]);$service->start($campaign);
+        $campaign=$service->create('instagram','instagram-action-'.str_replace('_','-',$key),'instagram-public',['targets'=>$targets,'session'=>'instagram-public','options'=>$options],approvedActions:app(\hexa_package_instagram\Transport\InstagramActionBridge::class)->definitions()[$key]['approvals']);$service->start($campaign);
         $this->assertSame(2,$campaign->tasks()->count());
         $queue=app(\hexa_package_social_automation\Automation\Campaigns\TaskQueue::class);$one=$queue->claim($device)['task'];
         $this->assertSame(1,app(Limiter::class)->status(new SessionActor('instagram-public'),$action->limitKey())['hour_used']);
@@ -230,6 +230,29 @@ final class InstagramActionRunnerTest extends TestCase
         $this->assertSame(2,app(Limiter::class)->status(new SessionActor('instagram-public'),$action->limitKey())['hour_used']);
         $this->assertTrue($device->fresh()->inCooldown());$this->assertSame('paused',$campaign->fresh()->status);
         $failed=DB::table('instagram_action_results')->where('outcome','failed')->first();$this->assertNotNull($failed);$record=json_decode($failed->record,true);$this->assertSame('/accounts/login/',$record['evidence']['diagnostics']['pathname']);
+    }
+
+    public static function efficientReadActions(): array {
+        return array_map(fn($key)=>[$key],['read_post','read_account_posts','read_profile','read_tagged_accounts','read_following','read_followers','read_inbox','read_thread','read_stories','download_story','read_highlights']);
+    }
+    #[\PHPUnit\Framework\Attributes\DataProvider('efficientReadActions')]
+    public function test_every_efficient_read_counts_repeats_skip_lists_and_shared_stops(string $key): void {
+        $url='https://www.instagram.com/stories/fixture/123456/';$target=$key==='download_story'?$url:($key==='read_thread'?'123':'fixture');
+        $ok=['success'=>true,'post'=>['code'=>'ABCDEF','caption'=>'Fixture','slides'=>[['image_url'=>'https://cdninstagram.com/a.png','is_video'=>false]]],'threads'=>[],'messages'=>[],'participants'=>[],
+            'data'=>['users'=>[['username'=>'other']],'complete'=>true,'stories'=>[],'highlights'=>[],'item'=>['owner'=>'fixture','image_url'=>'https://cdninstagram.com/a.png'],
+                'accounts'=>['fixture'=>['success'=>true,'username'=>'fixture','posts'=>[['url'=>'https://www.instagram.com/p/ABCDEF/','shortcode'=>'ABCDEF','pinned'=>false]]]]]];
+        $blocked=['success'=>false,'message'=>'Rate limited by Instagram.','status_code'=>429,'data'=>['accounts'=>['fixture'=>['success'=>false,'message'=>'Rate limited.']]]];
+        $reader=$this->createMock(InstagramScraperService::class);
+        foreach(['readPost','publicProfileFeeds','networkFeed','readInbox','readThread','accountStories','mediaByUrl','highlights'] as $method)$reader->method($method)->willReturnOnConsecutiveCalls($ok,$blocked);
+        $this->app->instance(InstagramScraperService::class,$reader);
+        $http=$this->createMock(\hexa_package_browser_worker\Services\BrowserHttpService::class);$http->method('getBinary')->willReturn(['success'=>true,'body'=>base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9sAAAAASUVORK5CYII=')]);$this->app->instance(\hexa_package_browser_worker\Services\BrowserHttpService::class,$http);
+        $device=\hexa_package_social_automation\Automation\Devices\Models\Device::create(['profile'=>'instagram-public','status'=>'active','paired_at'=>now()->subMonth()]);
+        $options=['classify'=>false];$runner=app(ActionRunner::class);$action=app(ActionRegistry::class)->get($key);
+        $r=$runner->run($key,new ActionRequest('instagram-public',[$target],campaignId:22,options:$options));$this->assertTrue($r->success,json_encode($r));
+        $r=$runner->run($key,new ActionRequest('instagram-public',[$target,'skipme'],skip:['skipme'],campaignId:22,options:$options));$this->assertSame(['skipped','skipped'],array_map(fn($record)=>$record->outcome,$r->records));
+        $this->assertSame(1,app(Limiter::class)->status(new SessionActor('instagram-public'),$action->limitKey())['hour_used']);
+        $this->travel(1)->minutes();
+        try{$r=$runner->run($key,new ActionRequest('instagram-public',[$target],options:$options));$this->assertSame('rate_limited',$r->stop,json_encode($r));$this->assertTrue($device->fresh()->inCooldown());$this->assertSame(2,app(Limiter::class)->status(new SessionActor('instagram-public'),$action->limitKey())['hour_used']);}finally{$this->travelBack();}
     }
 
 }
