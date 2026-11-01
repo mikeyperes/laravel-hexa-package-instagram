@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.19.1 - 2026-11-01
+
+- Account checks (`InstagramFollowAuditService`) hand the judge each post's full caption (up to Instagram's 2,200 characters, was 600) and its slide count (`media_count`).
+
 ## 1.19.0 - 2026-11-01
 
 - New `instagram:post <link or id>`: one post or reel, every slide, the caption and the comments. Logged in through `--profile` (media and comment data, up to `--comments`, 20); `--logged-out` reads the public embed through the public reader profile, with only the comments the embed carries. Service method `InstagramScraperService::readPost()`.

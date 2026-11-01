@@ -248,7 +248,9 @@ class InstagramFollowAuditService
                     'posts' => array_map(static fn (array $post): array => [
                         'url' => (string) ($post['url'] ?? ''),
                         'posted_at' => (string) ($post['posted_at'] ?? ''),
-                        'caption' => mb_substr((string) (($post['caption_blocks'] ?? [])[0] ?? ''), 0, 600),
+                        // Instagram captions are at most 2,200 characters; the judge gets all of it.
+                        'caption' => mb_substr((string) (($post['caption_blocks'] ?? [])[0] ?? ''), 0, 2200),
+                        'media_count' => max(1, (int) (($post['post_media_count'] ?? $post['media_count'] ?? 1))),
                         'image_url' => (string) (($post['cover_url'] ?? '') ?: (($post['image_urls'] ?? [])[0] ?? '')),
                         'kind' => (($post['product_type'] ?? '') === 'clips' || (($post['primary_media_box']['tag'] ?? '') === 'video')) ? 'video' : 'photo',
                         'image_text' => mb_substr((string) ($post['accessibility_caption'] ?? ''), 0, 300),
