@@ -173,3 +173,8 @@ Add shared story reads and cached CDN downloads with source identity; add human-
 `instagram:stories ACCOUNT --profile=SESSION --mode=efficient|human --json`; `instagram:stories STORY_URL --download --profile=SESSION --json`; `instagram:highlight show|add|remove|create --target=ID --story-id=ID --profile=SESSION --approval=RECEIPT --json` (writes also support `--dry-run`).
 
 Network reads: `instagram:network following|followers ACCOUNT --profile=SESSION --mode=efficient|human --limit=100 --json` uses the existing paced paginated reader and shared action records.
+
+## Direct messages (2026-11-01)
+
+Add read-only inbox/thread transport in efficient and human modes, and receipt-gated human sends in existing exact threads.
+`instagram:dm inbox --profile=SESSION --mode=efficient|human --json`; `instagram:dm read THREAD_ID --profile=SESSION --mode=efficient|human --json`; `instagram:dm send THREAD_ID --message=TEXT --profile=SESSION --approval=RECEIPT --json` (or `--dry-run`). Message sending requires an existing exact thread, a bound receipt and an empty draft. Unknown delivery is inconclusive and never resent automatically.

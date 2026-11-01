@@ -60,6 +60,10 @@ final class BackgroundTransport
                     'pinned' => $post['pinned'] ?? null], $items);
                 if (empty($raw['success'])) $raw['message'] = trim(($row['message'] ?? '').' '.($raw['message'] ?? '').' '.($raw['detail'] ?? ''));
                 break;
+            case 'read_inbox':
+                $raw=$this->reader->readInbox($r->session,(int)($r->options['limit'] ?? 20));$data=array_intersect_key($raw,array_flip(['threads']));break;
+            case 'read_thread':
+                $raw=$this->reader->readThread($r->session,$target,(int)($r->options['limit'] ?? 20));$data=array_intersect_key($raw,array_flip(['messages','participants']));break;
             case 'read_following':
             case 'read_followers':
                 $raw=$this->reader->networkFeed($r->session,$target,(int)($r->options['limit'] ?? 100),$action->key()==='read_followers'?'followers':'following');$data=(array)($raw['data'] ?? []);break;

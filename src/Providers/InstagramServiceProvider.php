@@ -74,6 +74,7 @@ class InstagramServiceProvider extends ServiceProvider
                 \hexa_package_instagram\Console\InstagramTaggedAccountsCommand::class,
                 \hexa_package_instagram\Console\InstagramStoriesCommand::class,
                 \hexa_package_instagram\Console\InstagramNetworkCommand::class,
+                \hexa_package_instagram\Console\InstagramDmCommand::class,
             ]);
         }
     }

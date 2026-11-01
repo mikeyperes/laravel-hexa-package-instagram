@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.23.0 (2026-11-01)
+
+- Add read-only inbox/thread transport in efficient and human modes, and receipt-gated human sends in existing exact threads.
+
 ## 1.22.0 (2026-11-01)
 
 - Add shared story reads and cached CDN downloads with source identity; add human-only highlight actions and reject legacy background edits.

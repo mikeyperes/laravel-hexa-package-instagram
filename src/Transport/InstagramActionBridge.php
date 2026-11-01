@@ -22,8 +22,10 @@ final class InstagramActionBridge implements NetworkActionBridge
         $targets=(array)($params['targets'] ?? $params['accounts'] ?? (isset($params['account']) ? [$params['account']] : []));
         if (!$targets || count($targets)>500) throw new \InvalidArgumentException('Give 1 to 500 targets.');
         $post=in_array($action,['read_post','read_tagged_accounts','like_post'],true);
-        $special=str_starts_with($action,'highlight_') || $action==='read_highlights';
+        $special=str_starts_with($action,'highlight_') || in_array($action,['read_highlights','read_inbox','read_thread','send_dm'],true);
         $params['targets']=array_values(array_unique(array_map(fn($v)=>$special ? trim((string)$v) : ($post ? ReadPostsProcess::postCode((string)$v) : Handles::normalize((string)$v)),$targets)));
+        if(in_array($action,['read_thread','send_dm'],true) && array_filter($params['targets'],fn($id)=>!preg_match('/^[0-9]{1,100}$/',$id)))throw new \InvalidArgumentException('Exact numeric thread ids are required.');
+        if($action==='send_dm' && (trim((string)($params['options']['message'] ?? ''))==='' || mb_strlen($params['options']['message'])>2000))throw new \InvalidArgumentException('A message of 1 to 2000 characters is required.');
         return $params;
     }
     public function steps(string $action,array $params): array {
@@ -31,6 +33,8 @@ final class InstagramActionBridge implements NetworkActionBridge
         return array_map(function($target)use($action,$adapter,$params){
             $post=in_array($action,['read_post','read_tagged_accounts','like_post'],true);
             $input=[$post ? 'code':'handle'=>$target,'engine_action'=>$action,'target'=>$target,'comments'=>(int)($params['options']['comments'] ?? 20),'limit'=>(int)($params['options']['limit'] ?? 5),'only'=>$params['only'] ?? [],'include_pinned'=>true,'direction'=>$action==='read_followers'?'followers':'following'];
+            if(in_array($action,['read_thread','send_dm'],true))$input['thread_id']=$target;
+            if($action==='send_dm')$input['message']=(string)$params['options']['message'];
             if(str_starts_with($action,'highlight_') || $action==='read_highlights') {
                 $binding=app(\hexa_package_instagram\Domains\Config\InstagramConfigRepository::class)->findAccount((string)($params['session'] ?? ''));
                 $input['handle']=Handles::normalize((string)($binding['instagram_username'] ?? ''));

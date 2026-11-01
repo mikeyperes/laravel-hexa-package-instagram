@@ -151,4 +151,25 @@ final class InstagramActionRunnerTest extends TestCase
             $r=app(ActionRunner::class)->run($key,new ActionRequest('instagram-public',['test','other'],Mode::Human));$this->assertTrue($r->success,json_encode($r));$this->assertSame(2,\hexa_package_social_automation\Automation\Campaigns\Models\Campaign::find($r->campaignId)->tasks()->count());
         }
     }
+
+    public function test_inbox_and_thread_reads_work_in_both_modes_with_shared_counting(): void {
+        $reader=$this->createMock(InstagramScraperService::class);$reader->method('readInbox')->willReturn(['success'=>true,'threads'=>[['id'=>'123']]]);$reader->method('readThread')->willReturn(['success'=>true,'messages'=>[['id'=>'1','text'=>'Fixture']],'participants'=>[]]);$this->app->instance(InstagramScraperService::class,$reader);
+        $device=\hexa_package_social_automation\Automation\Devices\Models\Device::create(['profile'=>'instagram-public','status'=>'active','paired_at'=>now()->subMonth()]);
+        foreach(['read_inbox'=>'inbox','read_thread'=>'123'] as $key=>$target){
+            DB::table('instagram_action_results')->delete();$r=app(ActionRunner::class)->run($key,new ActionRequest('instagram-public',[$target]));$this->assertTrue($r->success,json_encode($r));
+            $r=app(ActionRunner::class)->run($key,new ActionRequest('instagram-public',[$target],Mode::Human));$this->assertTrue($r->success,json_encode($r));
+            $queue=app(\hexa_package_social_automation\Automation\Campaigns\TaskQueue::class);$task=$queue->claim($device)['task'];$this->assertSame($key,$task['action']);$this->assertContains('inbox',$task['routes']);
+            $queue->report($device,$task['id'],$task['lease_token'],['status'=>'done','result'=>['status'=>'ok','threads'=>[],'messages'=>[],'routes'=>[]]]);
+        }
+        $this->assertSame(4,app(Limiter::class)->status(new SessionActor('instagram-public'),'open_inbox')['hour_used']);
+    }
+    public function test_message_send_refuses_missing_receipt_and_uncertain_write_is_never_retried(): void {
+        $r=app(ActionRunner::class)->run('send_dm',new ActionRequest('instagram-public',['123'],Mode::Human,options:['message'=>'Fixture only']));$this->assertFalse($r->success);$this->assertSame(0,DB::table('social_automation_campaigns')->count());
+        $device=\hexa_package_social_automation\Automation\Devices\Models\Device::create(['profile'=>'instagram-public','status'=>'active','paired_at'=>now()->subMonth()]);
+        $campaign=app(\hexa_package_social_automation\Automation\Campaigns\CampaignService::class)->create('instagram','instagram-action-send-dm','instagram-public',['targets'=>['123'],'options'=>['message'=>'Fixture only']],approvedActions:['send_dm']);
+        app(\hexa_package_social_automation\Automation\Campaigns\CampaignService::class)->start($campaign);
+        $queue=app(\hexa_package_social_automation\Automation\Campaigns\TaskQueue::class);$task=$queue->claim($device)['task'];
+        $this->assertSame('send_dm',$task['action']);$out=$queue->report($device,$task['id'],$task['lease_token'],['status'=>'failed','error_code'=>'timeout','error_message'=>'Uncertain send']);$this->assertFalse($out['retry']);
+        $this->assertSame('failed',\hexa_package_social_automation\Automation\Campaigns\Models\Task::find($task['id'])->status);
+    }
 }
