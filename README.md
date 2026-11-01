@@ -178,3 +178,8 @@ Network reads: `instagram:network following|followers ACCOUNT --profile=SESSION 
 
 Add read-only inbox/thread transport in efficient and human modes, and receipt-gated human sends in existing exact threads.
 `instagram:dm inbox --profile=SESSION --mode=efficient|human --json`; `instagram:dm read THREAD_ID --profile=SESSION --mode=efficient|human --json`; `instagram:dm send THREAD_ID --message=TEXT --profile=SESSION --approval=RECEIPT --json` (or `--dry-run`). Message sending requires an existing exact thread, a bound receipt and an empty draft. Unknown delivery is inconclusive and never resent automatically.
+
+## Task action entry point
+
+Complete the task-action entry point for single/list targets and optional synchronous readback. Wrap the existing Facebook official publisher with the same receipt and shared-limit runner. Import only toolbox-verified approval envelopes; reject legacy background publication.
+`instagram:run ACTION --profile=SESSION --mode=MODE --targets=JSON --options=JSON --skip=JSON --only=PARTS --approval=ID --json [--wait]` submits exactly one action. `instagram:approval --file=ENVELOPE --json` stores only a toolbox-verified receipt. `instagram:publish story|post IMAGE --account=ACCOUNT --profile=SESSION --key=KEY --approval=ID --json` uses the official API owned by the Facebook package. Human upload is not advertised: the existing extension has no supported upload transport.

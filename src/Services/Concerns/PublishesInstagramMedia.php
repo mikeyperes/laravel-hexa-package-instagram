@@ -38,6 +38,7 @@ trait PublishesInstagramMedia
      */
     public function postStoryImage(?string $profile, string $jpeg): array
     {
+        return $this->failure('Publishing requires the approved official API action.', 'Use instagram:publish with a bound receipt.');
         $resolved = $this->config->resolveProfile($profile);
         if ($refused = $this->readOnlyRefusal($resolved)) {
             return $refused;
@@ -69,6 +70,7 @@ trait PublishesInstagramMedia
      */
     public function postFeedImage(?string $profile, string $jpeg, string $caption): array
     {
+        return $this->failure('Publishing requires the approved official API action.', 'Use instagram:publish with a bound receipt.');
         $resolved = $this->config->resolveProfile($profile);
         if ($refused = $this->readOnlyRefusal($resolved)) {
             return $refused;

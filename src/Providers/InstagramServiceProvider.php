@@ -68,6 +68,8 @@ class InstagramServiceProvider extends ServiceProvider
                 \hexa_package_instagram\Console\InstagramPostsCommand::class,
                 \hexa_package_instagram\Console\InstagramPostCommand::class,
                 \hexa_package_instagram\Console\InstagramActionsCommand::class,
+                \hexa_package_instagram\Console\InstagramRunCommand::class,
+                \hexa_package_instagram\Console\InstagramApprovalCommand::class,
                 \hexa_package_instagram\Console\InstagramActCommand::class,
                 \hexa_package_instagram\Console\InstagramListAddCommand::class,
                 \hexa_package_instagram\Console\InstagramProfileCommand::class,

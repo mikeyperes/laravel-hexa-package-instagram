@@ -88,3 +88,11 @@
 - **Root cause:** `defaultProfile()` called `normalizeProfile()`, whose empty-value fallback called `defaultProfile()` again.
 - **Patch:** Normalize the configured default directly and fall back to `instagram-main` without re-entering the public normalizer.
 - **Guard:** Repository tests cover an empty configured default through both normalization and profile resolution.
+
+## IG-2026-11-01-01 - Legacy account writes bypassed shared action limits (high)
+
+- Symptom: background follow, publication and Highlight paths could act without Human Behavior accounting or a bound action receipt.
+- Impact: an account could exceed the shared action policy.
+- Cause: direct Browser Worker write methods predated the action runner.
+- Patch: remove the unrestricted follow command/method, refuse legacy background publication and Highlight writes, and route supported writes through receipt-gated human or official API actions.
+- Guard: the action runner validates mode and receipt; the legacy write methods return before dispatch.

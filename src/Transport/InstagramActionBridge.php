@@ -46,7 +46,7 @@ final class InstagramActionBridge implements NetworkActionBridge
                 $owner=(string)($params['options']['owner'] ?? '');
                 if($owner==='') $owner=(string)(StoredResult::query()->where('action','read_post')->where('target',$target)->where('outcome','done')->latest('id')->first()?->record['evidence']['owner'] ?? '');
                 if($owner!=='') $input['handle']=Handles::normalize($owner);
-                $input['address_fallback_reason']=$owner!=='' ? 'post_link_not_visible_in_owner_grid' : 'owner_unknown_no_visible_link';
+                if(($params['options']['allow_address_fallback'] ?? true)!==false)$input['address_fallback_reason']=$owner!=='' ? 'post_link_not_visible_in_owner_grid' : 'owner_unknown_no_visible_link';
             }
             if($action==='like_post')$input['url']='https://www.instagram.com/p/'.$target.'/';
             return ['action'=>$adapter,'input'=>$input,'key'=>$action.':'.hash('sha256',$target)];

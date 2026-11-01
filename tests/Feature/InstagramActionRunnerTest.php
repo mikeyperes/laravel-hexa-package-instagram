@@ -172,4 +172,12 @@ final class InstagramActionRunnerTest extends TestCase
         $this->assertSame('send_dm',$task['action']);$out=$queue->report($device,$task['id'],$task['lease_token'],['status'=>'failed','error_code'=>'timeout','error_message'=>'Uncertain send']);$this->assertFalse($out['retry']);
         $this->assertSame('failed',\hexa_package_social_automation\Automation\Campaigns\Models\Task::find($task['id'])->status);
     }
+
+    public function test_official_publish_actions_refuse_without_receipt_and_never_use_background_mode(): void {
+        foreach(['publish_story','publish_post'] as $key){
+            $r=app(ActionRunner::class)->run($key,new ActionRequest('instagram-public',['https://example.com/image.jpg'],Mode::Api));$this->assertFalse($r->success);$this->assertStringContainsString('approval receipt',implode(' ',$r->errors));
+            $r=app(ActionRunner::class)->run($key,new ActionRequest('instagram-public',['https://example.com/image.jpg'],Mode::Efficient));$this->assertFalse($r->success);
+        }
+        $this->assertSame(0,DB::table('human_behavior_actions')->count());
+    }
 }

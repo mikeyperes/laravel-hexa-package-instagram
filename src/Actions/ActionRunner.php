@@ -20,7 +20,7 @@ final class ActionRunner
             if (!in_array($request->session, array_column($this->sessions->all(), 'profile_id'), true)) throw new \InvalidArgumentException('Unknown exact browser session: '.$request->session);
             if (!in_array($request->mode, $action->modes(), true)) throw new \InvalidArgumentException('Mode is not supported for '.$key.'.');
             if ($action->risk() !== Risk::Read) {
-                if ($request->mode !== Mode::Human || !$request->approval) throw new \InvalidArgumentException('Writes require human mode and a verified approval receipt.');
+                if ((!($request->mode === Mode::Api && in_array($key,['publish_story','publish_post'],true)) && $request->mode !== Mode::Human) || !$request->approval) throw new \InvalidArgumentException('Writes require a supported write transport and a verified approval receipt.');
                 app(\hexa_package_instagram\Actions\Support\ApprovalVerifier::class)->verify($key,$request);
                 if(in_array($request->session,config('instagram.read_only_profiles',[]),true)) throw new \InvalidArgumentException('This session is read-only.');
             }

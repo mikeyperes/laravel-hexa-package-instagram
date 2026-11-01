@@ -9,7 +9,8 @@
     "hexawebsystems/laravel-hexa-package-browser-console": "*",
     "hexawebsystems/laravel-hexa-package-proxy": "*",
     "hexawebsystems/laravel-hexa-package-human-behavior": "*",
-    "hexawebsystems/laravel-hexa-package-social-automation": "*"
+    "hexawebsystems/laravel-hexa-package-social-automation": "*",
+    "hexawebsystems/laravel-hexa-package-facebook": "*"
   },
   "autoload": {
     "psr-4": {
@@ -25,5 +26,5 @@
   },
   "minimum-stability": "dev",
   "prefer-stable": true,
-  "version": "1.23.0"
+  "version": "1.24.0"
 }

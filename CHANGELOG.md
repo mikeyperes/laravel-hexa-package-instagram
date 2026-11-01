@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.24.0 (2026-11-01)
+
+- Complete the task-action entry point for single/list targets and optional synchronous readback. Wrap the existing Facebook official publisher with the same receipt and shared-limit runner. Import only toolbox-verified approval envelopes; reject legacy background publication.
+
 ## 1.23.0 (2026-11-01)
 
 - Add read-only inbox/thread transport in efficient and human modes, and receipt-gated human sends in existing exact threads.
