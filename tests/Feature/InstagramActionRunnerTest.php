@@ -12,7 +12,7 @@ final class InstagramActionRunnerTest extends TestCase
 {
     protected function setUp(): void {
         parent::setUp();
-        Schema::create('settings',function(Blueprint $t){$t->id();$t->string('key')->unique();$t->text('value')->nullable();$t->string('group')->nullable();$t->timestamps();});
+        Schema::create('settings',function(Blueprint $t){$t->id();$t->string('key')->unique();$t->text('value')->nullable();$t->string('type')->default('text');$t->string('group')->nullable();$t->timestamps();});
         (require base_path('packages/hexawebsystems/laravel-hexa-package-instagram/database/migrations/2026_11_01_172000_create_instagram_action_results.php'))->up();
         (require base_path('packages/hexawebsystems/laravel-hexa-package-human-behavior/database/migrations/2026_10_30_000001_create_human_behavior_actions_table.php'))->up();
         (require base_path('packages/hexawebsystems/laravel-hexa-package-social-automation/database/migrations/2026_10_28_000001_create_social_automation_tables.php'))->up();
@@ -203,6 +203,33 @@ final class InstagramActionRunnerTest extends TestCase
         \hexa_package_social_automation\Automation\Devices\Models\Device::create(['profile'=>'instagram-public','status'=>'active','paired_at'=>now()->subMonth()]);
         $r=app(ActionRunner::class)->run('read_highlights',new ActionRequest('instagram-public',['fixture'],Mode::Human,options:['account'=>'fixture']));$this->assertTrue($r->success);
         $this->assertSame('fixture',\hexa_package_social_automation\Automation\Campaigns\Models\Campaign::find($r->campaignId)->tasks()->first()->input['handle']);
+    }
+
+    public static function humanLifecycleActions(): array {
+        return array_map(fn($key)=>[$key],['read_post','read_account_posts','read_profile','read_tagged_accounts','follow','unfollow','like_post','read_following','read_followers','read_inbox','read_thread','send_dm','read_stories','read_highlights','highlight_add','highlight_remove','highlight_create']);
+    }
+    #[\PHPUnit\Framework\Attributes\DataProvider('humanLifecycleActions')]
+    public function test_every_human_recipe_counts_attempts_preserves_repeats_and_respects_stops_or_minimum_gap(string $key): void {
+        $registry=app(ActionRegistry::class);$action=$registry->get($key);
+        $targets=match(true){in_array($key,['read_post','read_tagged_accounts','like_post'],true)=>['ABCDEF','GHIJKL'],in_array($key,['read_thread','send_dm'],true),str_starts_with($key,'highlight_')=>['123','456'],default=>['fixture','other']};
+        $options=['owner'=>'fixture','account'=>'fixture','message'=>'Fixture only','story_ids'=>['111'],'classify'=>false,'title'=>'Fixture'];
+        if($action->risk()!==\hexa_package_instagram\Actions\Risk::Read){$r=app(ActionRunner::class)->run($key,new ActionRequest('instagram-public',$targets,Mode::Human,options:$options));$this->assertFalse($r->success);$this->assertSame(0,DB::table('social_automation_campaigns')->count());}
+        app(\hexa_package_instagram\Domains\Config\InstagramConfigRepository::class)->saveAccount('Fixture','instagram-public','fixture',true);
+        $device=\hexa_package_social_automation\Automation\Devices\Models\Device::create(['profile'=>'instagram-public','status'=>'active','paired_at'=>now()->subMonth()]);
+        $service=app(\hexa_package_social_automation\Automation\Campaigns\CampaignService::class);
+        // Isolated task lifecycle fixture: no browser, real account, or approval receipt is used.
+        $campaign=$service->create('instagram','instagram-action-'.str_replace('_','-',$key),'instagram-public',['targets'=>$targets,'session'=>'instagram-public','options'=>$options],approvedActions:[$key]);$service->start($campaign);
+        $this->assertSame(2,$campaign->tasks()->count());
+        $queue=app(\hexa_package_social_automation\Automation\Campaigns\TaskQueue::class);$one=$queue->claim($device)['task'];
+        $this->assertSame(1,app(Limiter::class)->status(new SessionActor('instagram-public'),$action->limitKey())['hour_used']);
+        $out=['status'=>'done','result'=>['status'=>'ok','posts'=>[],'tagged_accounts'=>[],'routes'=>[['route'=>'readback','how'=>'observed_result']]]];
+        $queue->report($device,$one['id'],$one['lease_token'],$out);$queue->report($device,$one['id'],$one['lease_token'],$out);
+        $this->assertSame(1,DB::table('instagram_action_results')->count());$this->assertSame(1,$campaign->records()->count());
+        if(str_starts_with($key,'highlight_')){$next=$queue->claim($device);$this->assertEmpty($next['task'] ?? null);$this->assertGreaterThanOrEqual(2690,app(Limiter::class)->waitFor(new SessionActor('instagram-public'),'highlight_edit'));return;}
+        $two=$queue->claim($device)['task'];$this->assertNotNull($two);$queue->report($device,$two['id'],$two['lease_token'],['status'=>'failed','error_code'=>'login_required','error_message'=>'Fixture stop','result'=>['diagnostics'=>['pathname'=>'/accounts/login/','condition_failed'=>'fixture_login']]]);
+        $this->assertSame(2,app(Limiter::class)->status(new SessionActor('instagram-public'),$action->limitKey())['hour_used']);
+        $this->assertTrue($device->fresh()->inCooldown());$this->assertSame('paused',$campaign->fresh()->status);
+        $failed=DB::table('instagram_action_results')->where('outcome','failed')->first();$this->assertNotNull($failed);$record=json_decode($failed->record,true);$this->assertSame('/accounts/login/',$record['evidence']['diagnostics']['pathname']);
     }
 
 }

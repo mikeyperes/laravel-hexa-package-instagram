@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.25.1 - 2026-11-01
+- Add table-driven human task lifecycle fixtures for counting, duplicate reports, stop diagnostics and highlight minimum-gap refusal.
+- The new isolated settings schema includes the settings model type field.
+
+
 ## 1.25.0 - 2026-11-01
 - Read explicitly selected source-account highlight items through the shared efficient action; keep that account in human navigation.
 
