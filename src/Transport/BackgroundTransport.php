@@ -57,7 +57,7 @@ final class BackgroundTransport
                     $raw['success'] = !empty($row['success']);
                 }
                 $data['posts'] = array_map(fn ($post) => ['url' => $post['url'] ?? '', 'code' => $post['shortcode'] ?? '',
-                    'taken_at' => $post['taken_at'] ?? $post['posted_at'] ?? null, 'pinned' => $post['pinned'] ?? null], $items);
+                    'pinned' => $post['pinned'] ?? null], $items);
                 if (empty($raw['success'])) $raw['message'] = trim(($row['message'] ?? '').' '.($raw['message'] ?? '').' '.($raw['detail'] ?? ''));
                 break;
             default: throw new \InvalidArgumentException('No background reader for '.$action->key());

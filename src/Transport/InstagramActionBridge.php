@@ -30,6 +30,12 @@ final class InstagramActionBridge implements NetworkActionBridge
         return array_map(function($target)use($action,$adapter,$params){
             $post=in_array($action,['read_post','read_tagged_accounts','like_post'],true);
             $input=[$post ? 'code':'handle'=>$target,'engine_action'=>$action,'target'=>$target,'comments'=>(int)($params['options']['comments'] ?? 20),'limit'=>(int)($params['options']['limit'] ?? 5),'only'=>$params['only'] ?? [],'include_pinned'=>true];
+            if($post) {
+                $owner=(string)($params['options']['owner'] ?? '');
+                if($owner==='') $owner=(string)(StoredResult::query()->where('action','read_post')->where('target',$target)->where('outcome','done')->latest('id')->first()?->record['evidence']['owner'] ?? '');
+                if($owner!=='') $input['handle']=Handles::normalize($owner);
+                $input['address_fallback_reason']=$owner!=='' ? 'post_link_not_visible_in_owner_grid' : 'owner_unknown_no_visible_link';
+            }
             if($action==='like_post')$input['url']='https://www.instagram.com/p/'.$target.'/';
             return ['action'=>$adapter,'input'=>$input,'key'=>$action.':'.hash('sha256',$target)];
         },$params['targets']);
@@ -52,7 +58,7 @@ final class InstagramActionBridge implements NetworkActionBridge
         if(isset($data['author'])){$data['owner']=$data['author'];unset($data['author']);}
         if(isset($data['tagged'])){$data['tagged_accounts']=$data['tagged'];unset($data['tagged']);}
         if($action==='read_profile')$data=['profile'=>$data];
-        if($action==='read_account_posts')$data=['posts'=>array_map(fn($p)=>array_intersect_key($p,array_flip(['url','code','taken_at','pinned'])),(array)($data['posts'] ?? []))];
+        if($action==='read_account_posts')$data=['posts'=>array_map(fn($p)=>array_intersect_key($p,array_flip(['url','code','pinned'])),(array)($data['posts'] ?? []))];
         if($only=$campaign->param('only',[]))$data=array_intersect_key($data,array_flip($only));
         $record=new InstagramResult($target,$outcome,$data,now('UTC')->toIso8601String(),'human',$campaign->profile,(array)($result['routes'] ?? []));
         StoredResult::query()->updateOrCreate(['repeat_key'=>hash('sha256','human:'.$campaign->id.':'.$task->id)],['action'=>$action,'session'=>$campaign->profile,'target'=>$target,'mode'=>'human','outcome'=>$outcome,'record'=>$record->jsonSerialize(),'performed_at'=>$record->at]);

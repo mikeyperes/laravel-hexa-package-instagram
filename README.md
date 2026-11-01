@@ -147,7 +147,7 @@ It builds on `laravel-hexa-package-browser-worker` for the generic browser runti
 
 ## Instagram engine foundation (2026-11-01)
 
-Phase 1 action engine: explicit sessions, shared Human Behavior limits, persistent JSON results, post output parts, links-only account posts, profiles and classified tags. Legacy reader transport and Browser Worker failure distinctions preserved. Test doubles now receive BrowserProxyConfigWriter.
+Phase 1 action engine: explicit sessions, shared Human Behavior limits, persistent JSON results, post output parts, account-post links and pinned flags, profiles and classified tags. Legacy reader transport and Browser Worker failure distinctions preserved. Test doubles now receive BrowserProxyConfigWriter.
 
 Commands: `instagram:actions --json`, `instagram:actions --results --action=read_post --profile=SESSION --json`,
 `instagram:post POST --profile=SESSION --mode=efficient --only=caption,slides --json`,
@@ -164,3 +164,5 @@ Human-mode actions, write approvals, story and direct-message actions remain lat
 ## Instagram human engine (2026-11-01)
 
 Add human transport through a network-generic Social Automation bridge; verified receipt gates for follow, unfollow and like; local list add; remove unrestricted follow; explicit logged-in fallback for inconclusive public embeds and session-busy stop mapping.
+
+Human account-post collection returns links and pinned flags only, without times. Human routes use home, Instagram Search, click the account result, and click the profile-grid post. A known owner can be supplied with --owner. URL navigation is a declared fallback only when no link path exists.

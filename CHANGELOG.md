@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.21.1 (2026-11-01)
+
+- Declare honest human account-post links/pinned coverage and owner-aware search/grid navigation.
+
 ## 1.21.0 (2026-11-01)
 
 - Add human transport through a network-generic Social Automation bridge; verified receipt gates for follow, unfollow and like; local list add; remove unrestricted follow; explicit logged-in fallback for inconclusive public embeds and session-busy stop mapping.

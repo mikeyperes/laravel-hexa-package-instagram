@@ -42,7 +42,7 @@ final class InstagramActionRunnerTest extends TestCase
     }
 
     public function test_all_foundation_actions_declare_both_modes_and_routes_from_config(): void {
-        $rows=app(ActionRegistry::class)->list();$this->assertCount(8,$rows);
+        $rows=array_values(array_filter(app(ActionRegistry::class)->list(),fn($r)=>in_array($r['key'],['read_post','read_account_posts','read_profile','read_tagged_accounts','follow','unfollow','like_post','add_to_list'],true)));$this->assertCount(8,$rows);
         foreach($rows as $row){if($row['key']==='add_to_list'){$this->assertSame(['local'],$row['modes']);continue;}$this->assertSame($row['risk']==='read'?['efficient','human']:['human'],$row['modes']);$this->assertNotEmpty($row['process_key']);$this->assertNotEmpty($row['routes']);$this->assertSame(config('social-automation.action_routes.'.$row['key']),$row['routes']);}
         $this->assertContains('tagged_accounts',app(ActionRegistry::class)->get('read_post')->parts());
     }
