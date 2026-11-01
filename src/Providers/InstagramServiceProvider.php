@@ -48,6 +48,9 @@ class InstagramServiceProvider extends ServiceProvider
             \hexa_package_anthropic\Services\AnthropicChatAnswers::answerByChat('hexa_package_instagram\\');
         }
 
+        $this->app->booted(function () {
+            app(\hexa_package_social_automation\Automation\Processes\ProcessRegistry::class)->registerBridge(app(\hexa_package_instagram\Transport\InstagramActionBridge::class));
+        });
         $this->registerWithPackageRegistry();
         $this->registerDocs();
 
@@ -55,7 +58,7 @@ class InstagramServiceProvider extends ServiceProvider
             $this->commands([
                 \hexa_package_instagram\Domains\Profiles\Console\InstagramProfilesCommand::class,
                 \hexa_package_instagram\Domains\Profiles\Console\SaveInstagramProfileCommand::class,
-                \hexa_package_instagram\Console\InstagramFollowAuditCommand::class, \hexa_package_instagram\Console\InstagramFollowCommand::class,
+                \hexa_package_instagram\Console\InstagramFollowAuditCommand::class,
                 \hexa_package_instagram\Console\InstagramPublishCommand::class,
                 \hexa_package_instagram\Console\InstagramExtractUsernamesCommand::class,
                 \hexa_package_instagram\Console\InstagramUnpublishCommand::class,
@@ -65,6 +68,8 @@ class InstagramServiceProvider extends ServiceProvider
                 \hexa_package_instagram\Console\InstagramPostsCommand::class,
                 \hexa_package_instagram\Console\InstagramPostCommand::class,
                 \hexa_package_instagram\Console\InstagramActionsCommand::class,
+                \hexa_package_instagram\Console\InstagramActCommand::class,
+                \hexa_package_instagram\Console\InstagramListAddCommand::class,
                 \hexa_package_instagram\Console\InstagramProfileCommand::class,
                 \hexa_package_instagram\Console\InstagramTaggedAccountsCommand::class,
                 \hexa_package_instagram\Console\InstagramStoriesCommand::class,

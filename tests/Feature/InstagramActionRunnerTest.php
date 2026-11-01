@@ -15,7 +15,8 @@ final class InstagramActionRunnerTest extends TestCase
         Schema::create('settings',function(Blueprint $t){$t->id();$t->string('key')->unique();$t->text('value')->nullable();$t->string('group')->nullable();$t->timestamps();});
         (require base_path('packages/hexawebsystems/laravel-hexa-package-instagram/database/migrations/2026_11_01_172000_create_instagram_action_results.php'))->up();
         (require base_path('packages/hexawebsystems/laravel-hexa-package-human-behavior/database/migrations/2026_10_30_000001_create_human_behavior_actions_table.php'))->up();
-        Schema::create('social_automation_devices',function(Blueprint $t){$t->id();$t->string('profile');$t->timestamp('paired_at')->nullable();$t->timestamp('cooldown_until')->nullable();$t->string('cooldown_reason')->nullable();$t->timestamps();});
+        (require base_path('packages/hexawebsystems/laravel-hexa-package-social-automation/database/migrations/2026_10_28_000001_create_social_automation_tables.php'))->up();
+        Schema::create('activity_logs',function(Blueprint $t){$t->id();$t->unsignedBigInteger('user_id')->nullable();$t->string('action')->nullable();$t->string('category')->nullable();$t->text('description')->nullable();$t->text('context')->nullable();$t->string('related_type')->nullable();$t->unsignedBigInteger('related_id')->nullable();$t->string('ip_address')->nullable();$t->string('user_timezone')->nullable();$t->timestamps();});
         $sessions=$this->createMock(BrowserSessionRegistryContract::class);$sessions->method('all')->willReturn([['profile_id'=>'instagram-public']]);$this->app->instance(BrowserSessionRegistryContract::class,$sessions);
     }
     public function test_read_filters_parts_persists_and_counts_shared_session(): void {
@@ -41,8 +42,8 @@ final class InstagramActionRunnerTest extends TestCase
     }
 
     public function test_all_foundation_actions_declare_both_modes_and_routes_from_config(): void {
-        $rows=app(ActionRegistry::class)->list();$this->assertCount(4,$rows);
-        foreach($rows as $row){$this->assertSame(['efficient','human'],$row['modes']);$this->assertNotEmpty($row['process_key']);$this->assertNotEmpty($row['routes']);$this->assertSame(config('social-automation.action_routes.'.$row['key']),$row['routes']);}
+        $rows=app(ActionRegistry::class)->list();$this->assertCount(8,$rows);
+        foreach($rows as $row){if($row['key']==='add_to_list'){$this->assertSame(['local'],$row['modes']);continue;}$this->assertSame($row['risk']==='read'?['efficient','human']:['human'],$row['modes']);$this->assertNotEmpty($row['process_key']);$this->assertNotEmpty($row['routes']);$this->assertSame(config('social-automation.action_routes.'.$row['key']),$row['routes']);}
         $this->assertContains('tagged_accounts',app(ActionRegistry::class)->get('read_post')->parts());
     }
     public function test_profile_posts_and_tagged_accounts_use_same_limits_and_result_contract(): void {
@@ -64,5 +65,61 @@ final class InstagramActionRunnerTest extends TestCase
         $r=app(ActionRunner::class)->run('read_post',new ActionRequest('instagram-public',['ABCDEF','GHIJKL']));
         $this->assertSame('rate_limited',$r->stop);$this->assertCount(1,$r->records);$this->assertSame([],$r->routes);
         $this->assertSame(1,DB::table('human_behavior_actions')->count());$this->assertNotNull(DB::table('social_automation_devices')->value('cooldown_until'));
+    }
+
+    public function test_human_reads_accept_single_and_multiple_targets_and_count_once_on_claim(): void {
+        $device=\hexa_package_social_automation\Automation\Devices\Models\Device::create(['profile'=>'instagram-public','status'=>'active','paired_at'=>now()->subMonth()]);
+        foreach(['read_post'=>['ABCDEF'],'read_account_posts'=>['test','other'],'read_profile'=>['test'],'read_tagged_accounts'=>['ABCDEF']] as $key=>$targets){
+            $r=app(ActionRunner::class)->run($key,new ActionRequest('instagram-public',$targets,Mode::Human,options:['classify'=>false]));
+            $this->assertTrue($r->success,json_encode($r));$this->assertNotNull($r->campaignId);
+            $campaign=\hexa_package_social_automation\Automation\Campaigns\Models\Campaign::findOrFail($r->campaignId);
+            $this->assertSame(count($targets),$campaign->tasks()->count());
+            $queue=app(\hexa_package_social_automation\Automation\Campaigns\TaskQueue::class);
+            $claimed=$queue->claim($device);$this->assertNotNull($claimed['task']);
+            $task=$claimed['task'];$this->assertNotEmpty($task['routes']);
+            $payload=['status'=>'done','result'=>['status'=>'ok','caption'=>'Proof','tagged_accounts'=>[],'routes'=>[['route'=>'post','how'=>'typed'],['route'=>'readback','how'=>'observed_result']]]];
+            $before=DB::table('human_behavior_actions')->count();
+            $this->assertTrue($queue->report($device,$task['id'],$task['lease_token'],$payload)['ack']);
+            $this->assertTrue($queue->report($device,$task['id'],$task['lease_token'],$payload)['duplicate']);
+            $this->assertSame($before,DB::table('human_behavior_actions')->count());
+            $this->assertSame(1,DB::table('instagram_action_results')->where('action',$key)->count());
+            app(\hexa_package_social_automation\Automation\Campaigns\CampaignService::class)->cancel($campaign);
+        }
+    }
+    public function test_all_account_writes_refuse_without_receipt_and_have_dry_route_plans(): void {
+        foreach(['follow','unfollow','like_post'] as $key){
+            $r=app(ActionRunner::class)->run($key,new ActionRequest('instagram-public',['test'],Mode::Human));
+            $this->assertFalse($r->success);$this->assertStringContainsString('approval receipt',implode(' ',$r->errors));
+            $this->assertSame(['human'],array_map(fn($m)=>$m->value,app(ActionRegistry::class)->get($key)->modes()));
+            $this->assertNotEmpty(app(ActionRegistry::class)->get($key)->routes());
+        }
+        $this->assertSame(0,DB::table('social_automation_campaigns')->count());$this->assertSame(0,DB::table('human_behavior_actions')->count());
+    }
+    public function test_media_less_embed_is_inconclusive_and_ownership_conflict_is_session_busy(): void {
+        $reader=$this->createMock(InstagramScraperService::class);$reader->method('readPost')->willReturnOnConsecutiveCalls(
+            ['success'=>false,'message'=>'Instagram returned the post embed without its media.'],['success'=>false,'message'=>'Browser profile ownership conflict']);
+        $this->app->instance(InstagramScraperService::class,$reader);
+        $r=app(ActionRunner::class)->run('read_post',new ActionRequest('instagram-public',['ABCDEF']));$this->assertSame('inconclusive',$r->records[0]->outcome);
+        DB::table('instagram_action_results')->delete();
+        $r=app(ActionRunner::class)->run('read_post',new ActionRequest('instagram-public',['ABCDEF']));$this->assertSame('session_busy',$r->stop);$this->assertStringNotContainsString('ownership conflict',implode(' ',$r->errors));
+    }
+
+    public function test_local_list_add_is_repeat_safe_and_never_counts_an_instagram_action(): void {
+        (require base_path('packages/hexawebsystems/laravel-hexa-package-social-automation/database/migrations/2026_10_31_000003_create_social_automation_lists.php'))->up();
+        $lists=app(\hexa_package_social_automation\Automation\Lists\AccountLists::class);$list=$lists->open('instagram','source','following','Test list');
+        foreach(['done','already'] as $outcome){
+            DB::table('instagram_action_results')->delete();
+            $r=app(ActionRunner::class)->run('add_to_list',new ActionRequest('instagram-public',['test'],Mode::Local,options:['list'=>'Test list']));
+            $this->assertTrue($r->success,json_encode($r));$this->assertSame($outcome,$r->records[0]->outcome);$this->assertSame(1,$r->records[0]->evidence['membership']['total']);
+        }
+        $this->assertSame(0,DB::table('human_behavior_actions')->count());
+    }
+    public function test_human_stop_pauses_the_session_and_blocks_efficient_reads(): void {
+        $device=\hexa_package_social_automation\Automation\Devices\Models\Device::create(['profile'=>'instagram-public','status'=>'active','paired_at'=>now()->subMonth()]);
+        $r=app(ActionRunner::class)->run('read_profile',new ActionRequest('instagram-public',['test'],Mode::Human));
+        $queue=app(\hexa_package_social_automation\Automation\Campaigns\TaskQueue::class);$task=$queue->claim($device)['task'];
+        $answer=$queue->report($device,$task['id'],$task['lease_token'],['status'=>'failed','error_code'=>'challenge','error_message'=>'Instagram security check']);
+        $this->assertTrue($answer['stopped']);$this->assertSame(1,DB::table('instagram_action_results')->where('outcome','failed')->count());
+        $read=app(ActionRunner::class)->run('read_post',new ActionRequest('instagram-public',['ABCDEF']));$this->assertSame('cooldown',$read->stop);
     }
 }

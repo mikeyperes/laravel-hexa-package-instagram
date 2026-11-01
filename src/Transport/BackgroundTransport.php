@@ -87,17 +87,20 @@ final class BackgroundTransport
     private function mapped(InstagramAction $a, ActionRequest $r, array $raw, array $data, array $routes): ActionResult
     {
         $success = !empty($raw['success']); $stop = $this->stop($raw);
-        $message = trim(($raw['message'] ?? '').' '.($raw['detail'] ?? ''));
+        $message = $stop === 'session_busy' ? 'The session is busy with another browser owner; retry after it is released.' : trim(($raw['message'] ?? '').' '.($raw['detail'] ?? ''));
         if ($r->only) $data = array_intersect_key($data, array_flip(array_merge($r->only, ['classifications'])));
         if (!$success) $data['message'] = $message;
         // Legacy readers do not expose observed navigation rows. Never fabricate route proof.
-        $record = new InstagramResult($r->targets[0], $success ? 'done' : 'failed', $data, now('UTC')->toIso8601String(), $r->mode->value, $r->session, $routes);
+        $outcome = $success ? 'done' : (str_contains(strtolower($message), 'embed without its media') ? 'inconclusive' : 'failed');
+        $record = new InstagramResult($r->targets[0], $outcome, $data, now('UTC')->toIso8601String(), $r->mode->value, $r->session, $routes);
         return new ActionResult($success, $a->key(), $r->mode->value, $r->session, [$record], $success ? [] : [$message], $stop, $routes);
     }
     private function stop(array $raw): ?string
     {
-        if (!empty($raw['browser_failed']) || ($raw['status_code'] ?? 0) === 409) return null;
+        if (($raw['status_code'] ?? 0) === 409 || str_contains(strtolower(json_encode($raw)), 'ownership conflict')) return 'session_busy';
+        if (!empty($raw['browser_failed'])) return null;
         $message = strtolower(json_encode($raw));
+        if (str_contains($message, 'ownership conflict') || str_contains($message, 'profile is busy')) return 'session_busy';
         foreach (['rate_limited' => ['rate limited','rate limit','status 429','"status":429'],
             'challenge' => ['challenge_required','challenge required','security check'], 'login_required' => ['login_required','redirected to the instagram login'],
             'action_blocked' => ['action_blocked','action blocked']] as $signal => $matches) {

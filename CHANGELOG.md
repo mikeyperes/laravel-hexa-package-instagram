@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.21.0 (2026-11-01)
+
+- Add human transport through a network-generic Social Automation bridge; verified receipt gates for follow, unfollow and like; local list add; remove unrestricted follow; explicit logged-in fallback for inconclusive public embeds and session-busy stop mapping.
+
 ## 1.20.0 (2026-11-01)
 
 - Phase 1 action engine: explicit sessions, shared Human Behavior limits, persistent JSON results, post output parts, links-only account posts, profiles and classified tags. Legacy reader transport and Browser Worker failure distinctions preserved. Test doubles now receive BrowserProxyConfigWriter.

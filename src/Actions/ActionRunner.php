@@ -21,10 +21,12 @@ final class ActionRunner
             if (!in_array($request->mode, $action->modes(), true)) throw new \InvalidArgumentException('Mode is not supported for '.$key.'.');
             if ($action->risk() !== Risk::Read) {
                 if ($request->mode !== Mode::Human || !$request->approval) throw new \InvalidArgumentException('Writes require human mode and a verified approval receipt.');
-                throw new \InvalidArgumentException('Write approval verification is not installed.');
+                app(\hexa_package_instagram\Actions\Support\ApprovalVerifier::class)->verify($key,$request);
+                if(in_array($request->session,config('instagram.read_only_profiles',[]),true)) throw new \InvalidArgumentException('This session is read-only.');
             }
             if ($request->targets === [] || array_filter($request->targets, fn ($t) => !is_string($t) || trim($t) === '')) throw new \InvalidArgumentException('At least one nonempty target is required.');
             if (array_diff($request->only, $action->parts())) throw new \InvalidArgumentException('Unknown output part.');
+            if ($request->mode === Mode::Human) return app(\hexa_package_instagram\Transport\HumanTransport::class)->run($key,$request);
             $lock = Cache::lock('instagram:action:'.$request->session, 600);
             if (!$lock->get()) { $result->stop = 'session_busy'; $result->errors[] = 'Another action owns this session.'; return $result; }
             try {
@@ -38,7 +40,7 @@ final class ActionRunner
                     }
                     $device = Device::query()->where('profile', $request->session)->first();
                     if ($device?->inCooldown()) { $result->stop = 'cooldown'; $result->errors[] = ['wait_seconds' => max(1, (int) now()->diffInSeconds($device->cooldown_until, false)), 'reason' => $device->cooldown_reason]; break; }
-                    $wait = $this->limiter->waitFor($actor, $action->limitKey());
+                    $wait = $action->limitKey() === '' ? 0 : $this->limiter->waitFor($actor, $action->limitKey());
                     if ($wait > 0) { $result->stop = 'limit_exhausted'; $result->errors[] = ['wait_seconds' => $wait, 'limit' => $action->limitKey()]; break; }
                     $last = StoredResult::query()->where('session', $request->session)->latest('performed_at')->first();
                     if ($last) {
@@ -48,7 +50,7 @@ final class ActionRunner
                     }
                     $one = $action->run($request->forTarget($target));
                     // Conservatively count every dispatched attempt, including uncertain reads.
-                    $this->limiter->record($actor, $action->limitKey());
+                    if ($action->limitKey() !== '') $this->limiter->record($actor, $action->limitKey());
                     foreach ($one->records as $record) {
                         StoredResult::query()->create(['action' => $key, 'session' => $request->session, 'target' => $target, 'mode' => $request->mode->value,
                             'outcome' => $record->outcome, 'repeat_key' => $repeatKey, 'record' => $record->jsonSerialize(), 'performed_at' => $record->at]);
@@ -59,8 +61,7 @@ final class ActionRunner
                     if ($one->stop) {
                         $result->stop = $one->stop;
                         if (in_array($one->stop, config('social-automation.stop_signals', []), true)) {
-                            $until = now()->addMinutes((int) config('social-automation.stop_cooldown_minutes', 120));
-                            if (!$device?->cooldown_until || $device->cooldown_until->lt($until)) Device::query()->updateOrCreate(['profile' => $request->session], ['cooldown_until' => $until, 'cooldown_reason' => $one->stop]);
+                            app(\hexa_package_social_automation\Automation\Devices\DeviceService::class)->cooldown($request->session,$one->stop);
                         }
                         break;
                     }
@@ -68,6 +69,14 @@ final class ActionRunner
                 $result->success = !$result->stop && $result->errors === [] && $result->records !== [];
             } finally { $lock->release(); }
         } catch (Throwable $e) { $result->errors[] = $e->getMessage(); }
+        if (!$result->success && !$result->stop && ($request->options['fallback_session'] ?? '') !== '' &&
+            $request->session === config('instagram.public_reader_profile', 'instagram-public') &&
+            count(array_filter($result->records, fn ($row) => $row->outcome === 'inconclusive')) > 0) {
+            $options = $request->options; $fallback = $options['fallback_session']; unset($options['fallback_session']);
+            $next = $this->run($key, new ActionRequest($fallback, $request->targets, $request->mode, $request->only, $request->skip,
+                $request->approval, $request->campaignId, $request->context, $options));
+            return $next;
+        }
         return $result;
     }
 }

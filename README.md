@@ -160,3 +160,7 @@ are explicit `ActionRequest::options`, so callers never encode execution control
 Skip lists and same-campaign results prevent repeated completed work; fresh reads without a campaign remain fresh.
 The public embed reports limited profile coverage. Legacy readers supply no observed route rows, so results do not invent them.
 Human-mode actions, write approvals, story and direct-message actions remain later phases.
+
+## Instagram human engine (2026-11-01)
+
+Add human transport through a network-generic Social Automation bridge; verified receipt gates for follow, unfollow and like; local list add; remove unrestricted follow; explicit logged-in fallback for inconclusive public embeds and session-busy stop mapping.
