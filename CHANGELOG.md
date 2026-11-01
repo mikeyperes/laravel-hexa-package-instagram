@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.24.2 - 2026-11-01
+- Require distinct stable keys per target for publication lists; support per-target captions without bypassing receipt binding.
+
+
 ## 1.24.1 - 2026-11-01
 - Correct optional JSON defaults in the generic action command; add single/list command coverage.
 - Complete Instagram Feature suite: 41 tests, 290 assertions, no errors.

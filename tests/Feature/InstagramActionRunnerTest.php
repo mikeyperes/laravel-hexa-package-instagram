@@ -187,4 +187,14 @@ final class InstagramActionRunnerTest extends TestCase
         $this->assertSame(2,DB::table('instagram_action_results')->count());
     }
 
+    public function test_publication_lists_require_distinct_per_target_keys_before_any_dispatch(): void {
+        $targets=['https://example.com/one.jpg','https://example.com/two.jpg'];
+        foreach([[],['keys'=>array_fill_keys($targets,'same')]] as $options){
+            $r=app(ActionRunner::class)->run('publish_post',new ActionRequest('instagram-public',$targets,Mode::Api,options:$options));
+            $this->assertFalse($r->success);$this->assertStringContainsString('distinct stable key',implode(' ',$r->errors));
+        }
+        $r=app(ActionRunner::class)->run('publish_post',new ActionRequest('instagram-public',$targets,Mode::Api,options:['keys'=>array_combine($targets,['one','two'])]));
+        $this->assertStringContainsString('approval receipt',implode(' ',$r->errors));$this->assertSame(0,DB::table('human_behavior_actions')->count());
+    }
+
 }

@@ -19,6 +19,10 @@ final class ActionRunner
             $action = $this->registry->get($key);
             if (!in_array($request->session, array_column($this->sessions->all(), 'profile_id'), true)) throw new \InvalidArgumentException('Unknown exact browser session: '.$request->session);
             if (!in_array($request->mode, $action->modes(), true)) throw new \InvalidArgumentException('Mode is not supported for '.$key.'.');
+            if (in_array($key,['publish_story','publish_post'],true) && count(array_unique($request->targets))>1) {
+                $keys=(array)($request->options['keys'] ?? []);$selected=array_map(fn($target)=>(string)($keys[$target] ?? ''),array_unique($request->targets));
+                if(in_array('',$selected,true) || count(array_unique($selected))!==count($selected)) throw new \InvalidArgumentException('A publication list requires a distinct stable key for every target in options.keys.');
+            }
             if ($action->risk() !== Risk::Read) {
                 if ((!($request->mode === Mode::Api && in_array($key,['publish_story','publish_post'],true)) && $request->mode !== Mode::Human) || !$request->approval) throw new \InvalidArgumentException('Writes require a supported write transport and a verified approval receipt.');
                 app(\hexa_package_instagram\Actions\Support\ApprovalVerifier::class)->verify($key,$request);
