@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.25.0 - 2026-11-01
+- Read explicitly selected source-account highlight items through the shared efficient action; keep that account in human navigation.
+
+
 ## 1.24.2 - 2026-11-01
 - Require distinct stable keys per target for publication lists; support per-target captions without bypassing receipt binding.
 

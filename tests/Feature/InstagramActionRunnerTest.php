@@ -197,4 +197,12 @@ final class InstagramActionRunnerTest extends TestCase
         $this->assertStringContainsString('approval receipt',implode(' ',$r->errors));$this->assertSame(0,DB::table('human_behavior_actions')->count());
     }
 
+    public function test_highlight_source_account_is_explicit_in_efficient_and_human_reads(): void {
+        $reader=$this->createMock(InstagramScraperService::class);$reader->method('accountProfiles')->willReturn(['success'=>true,'data'=>['accounts'=>['fixture'=>['user_id'=>'123']]]]);$reader->method('highlightFeeds')->willReturn(['success'=>true,'data'=>['highlights'=>[['id'=>'456','items'=>[]]]]]);$this->app->instance(InstagramScraperService::class,$reader);
+        $r=app(ActionRunner::class)->run('read_highlights',new ActionRequest('instagram-public',['fixture'],options:['account'=>'fixture','limit'=>1]));$this->assertTrue($r->success);$this->assertSame('456',$r->records[0]->evidence['highlights'][0]['id']);
+        \hexa_package_social_automation\Automation\Devices\Models\Device::create(['profile'=>'instagram-public','status'=>'active','paired_at'=>now()->subMonth()]);
+        $r=app(ActionRunner::class)->run('read_highlights',new ActionRequest('instagram-public',['fixture'],Mode::Human,options:['account'=>'fixture']));$this->assertTrue($r->success);
+        $this->assertSame('fixture',\hexa_package_social_automation\Automation\Campaigns\Models\Campaign::find($r->campaignId)->tasks()->first()->input['handle']);
+    }
+
 }

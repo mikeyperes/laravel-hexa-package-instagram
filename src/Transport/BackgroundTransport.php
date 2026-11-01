@@ -71,7 +71,12 @@ final class BackgroundTransport
                 $raw=$this->reader->accountStories($r->session,$target,(int)($r->options['owner_lookups'] ?? 10));
                 $data=['stories'=>array_map(function($story){if(isset($story['tagged'])){$story['tagged_accounts']=$story['tagged'];unset($story['tagged']);}return $story;},$raw['stories'] ?? [])];break;
             case 'read_highlights':
-                $raw=$this->reader->highlights($r->session,$target==='self'?'':$target);$data=['highlights'=>$raw['data'] ?? []];break;
+                if(($account=(string)($r->options['account'] ?? ''))!=='') {
+                    $profile=$this->reader->accountProfiles($r->session,[$account]);$id=(string)($profile['data']['accounts'][$account]['user_id'] ?? '');
+                    if($id===''){$raw=['success'=>false,'message'=>'The highlight source account could not be resolved.'];$data=['highlights'=>[]];break;}
+                    $raw=$this->reader->highlightFeeds($r->session,$id,(int)($r->options['limit'] ?? 15));$data=['highlights'=>$raw['data']['highlights'] ?? []];
+                }else{$raw=$this->reader->highlights($r->session,$target==='self'?'':$target);$data=['highlights'=>$raw['data'] ?? []];}
+                break;
             case 'download_story':
                 $known=\hexa_package_instagram\Actions\Models\StoredResult::query()->where('session',$r->session)->where('action','read_stories')->where('outcome','done')->latest('id')->limit(20)->get();
                 $saved=null;

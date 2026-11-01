@@ -37,7 +37,7 @@ final class InstagramActionBridge implements NetworkActionBridge
             if($action==='send_dm')$input['message']=(string)$params['options']['message'];
             if(str_starts_with($action,'highlight_') || $action==='read_highlights') {
                 $binding=app(\hexa_package_instagram\Domains\Config\InstagramConfigRepository::class)->findAccount((string)($params['session'] ?? ''));
-                $input['handle']=Handles::normalize((string)($binding['instagram_username'] ?? ''));
+                $input['handle']=Handles::normalize((string)(($action==='read_highlights' ? ($params['options']['account'] ?? '') : '') ?: ($binding['instagram_username'] ?? '')));
                 $input['highlight_id']=$target==='self'?'':$target;$input['operation']=$action;
                 $input['title']=(string)($params['options']['title'] ?? '');$input['story_ids']=(array)($params['options']['story_ids'] ?? []);
                 if($action!=='read_highlights' && (!$input['story_ids'] || array_filter($input['story_ids'],fn($id)=>!ctype_digit((string)$id)))) throw new \InvalidArgumentException('Exact numeric story ids are required.');
