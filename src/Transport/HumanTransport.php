@@ -11,7 +11,7 @@ final class HumanTransport
         $device=Device::query()->where('profile',$r->session)->first();
         if (!$device || $device->status!==Device::ACTIVE) return new ActionResult(false,$action,'human',$r->session,[],['The session has no paired active extension.'],'extension_unavailable');
         if ($device->inCooldown()) return new ActionResult(false,$action,'human',$r->session,[],['The session is resting until '.$device->cooldown_until->toIso8601String()],'cooldown');
-        $params=['targets'=>array_values(array_diff(array_unique($r->targets),$r->skip)),'only'=>$r->only,'options'=>$r->options,'approval'=>$r->approval,'context'=>$r->context];
+        $params=['session'=>$r->session,'targets'=>array_values(array_diff(array_unique($r->targets),$r->skip)),'only'=>$r->only,'options'=>$r->options,'approval'=>$r->approval,'context'=>$r->context];
         if (!$params['targets']) return new ActionResult(true,$action,'human',$r->session);
         $definition=$this->bridge->definitions()[$action];
         $existing=$r->campaignId ? Campaign::query()->find($r->campaignId) : ($r->approval ? Campaign::query()->where('network','instagram')->where('profile',$r->session)->where('process',$definition['process_key'])->where('params->approval',$r->approval)->latest('id')->first() : null);

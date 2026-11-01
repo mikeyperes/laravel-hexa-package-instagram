@@ -5,7 +5,7 @@ use InvalidArgumentException;
 final class ActionRegistry
 {
     private array $actions = [];
-    public function __construct() { foreach ([ReadPost::class, ReadAccountPosts::class, ReadProfile::class, ReadTaggedAccounts::class, Follow::class, Unfollow::class, LikePost::class, AddToList::class] as $class) $this->register(new $class); }
+    public function __construct() { foreach ([ReadPost::class, ReadAccountPosts::class, ReadProfile::class, ReadTaggedAccounts::class, Follow::class, Unfollow::class, LikePost::class, AddToList::class, ReadFollowing::class, ReadFollowers::class, ReadStories::class, DownloadStory::class, ReadHighlights::class, HighlightAdd::class, HighlightRemove::class, HighlightCreate::class] as $class) $this->register(new $class); }
     public function register(InstagramAction $action): void { $this->actions[$action->key()] = $action; }
     public function get(string $key): InstagramAction { return $this->actions[$key] ?? throw new InvalidArgumentException('Unknown Instagram action: '.$key); }
     public function list(): array

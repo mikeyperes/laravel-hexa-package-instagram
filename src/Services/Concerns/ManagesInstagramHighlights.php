@@ -62,6 +62,7 @@ trait ManagesInstagramHighlights
     /** @return array{success: bool, message: string, detail: string, status_code: int, data: array<string, mixed>} */
     private function runHighlightStep(?string $profile, string $action, array $args, string $message): array
     {
+        if ($action !== 'read') return $this->failure('Highlight changes require the human action engine.', 'Use instagram:highlight with a bound approval receipt.');
         $resolved = $this->config->resolveProfile($profile);
         if ($action !== 'read' && ($refused = $this->readOnlyRefusal($resolved))) {
             return $refused;

@@ -60,6 +60,34 @@ final class BackgroundTransport
                     'pinned' => $post['pinned'] ?? null], $items);
                 if (empty($raw['success'])) $raw['message'] = trim(($row['message'] ?? '').' '.($raw['message'] ?? '').' '.($raw['detail'] ?? ''));
                 break;
+            case 'read_following':
+            case 'read_followers':
+                $raw=$this->reader->networkFeed($r->session,$target,(int)($r->options['limit'] ?? 100),$action->key()==='read_followers'?'followers':'following');$data=(array)($raw['data'] ?? []);break;
+            case 'read_stories':
+                $raw=$this->reader->accountStories($r->session,$target,(int)($r->options['owner_lookups'] ?? 10));
+                $data=['stories'=>array_map(function($story){if(isset($story['tagged'])){$story['tagged_accounts']=$story['tagged'];unset($story['tagged']);}return $story;},$raw['stories'] ?? [])];break;
+            case 'read_highlights':
+                $raw=$this->reader->highlights($r->session,$target==='self'?'':$target);$data=['highlights'=>$raw['data'] ?? []];break;
+            case 'download_story':
+                $known=\hexa_package_instagram\Actions\Models\StoredResult::query()->where('session',$r->session)->where('action','read_stories')->where('outcome','done')->latest('id')->limit(20)->get();
+                $saved=null;
+                foreach($known as $entry) foreach((array)($entry->record['evidence']['stories'] ?? []) as $story) if(($story['url'] ?? '')===$target)$saved=$story;
+                $raw=$saved ? ['success'=>true,'data'=>['item'=>$saved]] : $this->reader->mediaByUrl($r->session,$target);
+                if(!empty($raw['success'])) {
+                    $item=$raw['data']['item'] ?? [];
+                    $url=(string)(($item['video_url'] ?? '') ?: ($item['image_url'] ?? ''));
+                    if(!preg_match('~^https://[^/]+/(.+)$~',$url) || !preg_match('/(?:^|\.)(?:cdninstagram\.com|fbcdn\.net)$/',(string)parse_url($url,PHP_URL_HOST))) throw new \InvalidArgumentException('Story media did not resolve to an Instagram CDN URL.');
+                    $download=app(\hexa_package_browser_worker\Services\BrowserHttpService::class)->getBinary($url,['timeout'=>30,'route_profile'=>$r->session,'require_route'=>true]);
+                    if(empty($download['success'])) { $raw=['success'=>false,'message'=>'The story media download failed.']; break; }
+                    $bytes=(string)$download['body'];$mime=(new \finfo(FILEINFO_MIME_TYPE))->buffer($bytes);
+                    if(!in_array($mime,['image/jpeg','image/png','image/webp','video/mp4'],true)) throw new \InvalidArgumentException('Unsupported story media.');
+                    $ext=match($mime){'image/png'=>'png','image/webp'=>'webp','video/mp4'=>'mp4',default=>'jpg'};
+                    $path=storage_path('app/private/instagram/stories/'.hash('sha256',$r->session.':'.$target).'.'.$ext);
+                    if(!is_dir(dirname($path)))mkdir(dirname($path),0700,true);
+                    if(!is_file($path))file_put_contents($path,$bytes,LOCK_EX);
+                    $data=['download'=>['path'=>$path,'mime'=>$mime,'sha256'=>hash_file('sha256',$path),'source'=>['network'=>'instagram','account'=>$item['owner'] ?? '', 'kind'=>'story','taken_at'=>$item['taken_at'] ?? null,'url'=>$target]]];
+                }
+                break;
             default: throw new \InvalidArgumentException('No background reader for '.$action->key());
         }
         $result = $this->mapped($action, $r, $raw, $data, $routes);

@@ -122,4 +122,33 @@ final class InstagramActionRunnerTest extends TestCase
         $this->assertTrue($answer['stopped']);$this->assertSame(1,DB::table('instagram_action_results')->where('outcome','failed')->count());
         $read=app(ActionRunner::class)->run('read_post',new ActionRequest('instagram-public',['ABCDEF']));$this->assertSame('cooldown',$read->stop);
     }
+
+    public function test_story_reads_share_results_counts_and_support_human_queue(): void {
+        $reader=$this->createMock(InstagramScraperService::class);$reader->method('accountStories')->willReturn(['success'=>true,'stories'=>[['id'=>'123','url'=>'https://www.instagram.com/stories/test/123/','image_url'=>'https://cdninstagram.com/story.jpg']]]);$this->app->instance(InstagramScraperService::class,$reader);
+        $r=app(ActionRunner::class)->run('read_stories',new ActionRequest('instagram-public',['test']));$this->assertTrue($r->success);$this->assertCount(1,$r->records[0]->evidence['stories']);
+        $this->assertSame(1,app(Limiter::class)->status(new SessionActor('instagram-public'),'read_stories')['hour_used']);
+        \hexa_package_social_automation\Automation\Devices\Models\Device::create(['profile'=>'instagram-public','status'=>'active','paired_at'=>now()->subMonth()]);
+        $r=app(ActionRunner::class)->run('read_stories',new ActionRequest('instagram-public',['test'],Mode::Human));$this->assertTrue($r->success);$this->assertNotNull($r->campaignId);
+        $task=app(\hexa_package_social_automation\Automation\Campaigns\TaskQueue::class)->claim(\hexa_package_social_automation\Automation\Devices\Models\Device::first())['task'];
+        $this->assertSame('read_stories',$task['action']);$this->assertContains('stories',$task['routes']);
+    }
+    public function test_download_story_saves_source_metadata_and_rejects_human_mode(): void {
+        $reader=$this->createMock(InstagramScraperService::class);$reader->method('mediaByUrl')->willReturn(['success'=>true,'data'=>['item'=>['owner'=>'test','image_url'=>'https://cdninstagram.com/a.png','taken_at'=>123]]]);$this->app->instance(InstagramScraperService::class,$reader);
+        $http=$this->createMock(\hexa_package_browser_worker\Services\BrowserHttpService::class);$http->method('getBinary')->willReturn(['success'=>true,'body'=>base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9sAAAAASUVORK5CYII=')]);$this->app->instance(\hexa_package_browser_worker\Services\BrowserHttpService::class,$http);
+        $r=app(ActionRunner::class)->run('download_story',new ActionRequest('instagram-public',['https://www.instagram.com/stories/test/123/']));$this->assertTrue($r->success,json_encode($r));$this->assertFileExists($r->records[0]->evidence['download']['path']);$this->assertSame('story',$r->records[0]->evidence['download']['source']['kind']);
+        $r=app(ActionRunner::class)->run('download_story',new ActionRequest('instagram-public',['test'],Mode::Human));$this->assertFalse($r->success);
+    }
+    public function test_highlight_writes_require_receipts_and_shared_minimum_gap(): void {
+        foreach(['highlight_add','highlight_remove','highlight_create'] as $key){$r=app(ActionRunner::class)->run($key,new ActionRequest('instagram-public',['123'],Mode::Human));$this->assertFalse($r->success);$this->assertStringContainsString('approval receipt',implode(' ',$r->errors));$this->assertContains('highlight',app(ActionRegistry::class)->get($key)->routes());}
+        $actor=new SessionActor('instagram-public');app(Limiter::class)->record($actor,'highlight_edit');$this->assertGreaterThanOrEqual(2690,app(Limiter::class)->waitFor($actor,'highlight_edit'));
+    }
+
+    public function test_network_directions_use_the_same_runner_in_both_modes(): void {
+        $reader=$this->createMock(InstagramScraperService::class);$reader->method('networkFeed')->willReturn(['success'=>true,'data'=>['users'=>[['username'=>'other']],'complete'=>true]]);$this->app->instance(InstagramScraperService::class,$reader);
+        \hexa_package_social_automation\Automation\Devices\Models\Device::create(['profile'=>'instagram-public','status'=>'active','paired_at'=>now()->subMonth()]);
+        foreach(['read_following','read_followers'] as $key){
+            DB::table('instagram_action_results')->delete();$r=app(ActionRunner::class)->run($key,new ActionRequest('instagram-public',['test']));$this->assertTrue($r->success);$this->assertCount(1,$r->records[0]->evidence['users']);
+            $r=app(ActionRunner::class)->run($key,new ActionRequest('instagram-public',['test','other'],Mode::Human));$this->assertTrue($r->success,json_encode($r));$this->assertSame(2,\hexa_package_social_automation\Automation\Campaigns\Models\Campaign::find($r->campaignId)->tasks()->count());
+        }
+    }
 }

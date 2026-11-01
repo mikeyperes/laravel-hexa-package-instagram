@@ -22,14 +22,22 @@ final class InstagramActionBridge implements NetworkActionBridge
         $targets=(array)($params['targets'] ?? $params['accounts'] ?? (isset($params['account']) ? [$params['account']] : []));
         if (!$targets || count($targets)>500) throw new \InvalidArgumentException('Give 1 to 500 targets.');
         $post=in_array($action,['read_post','read_tagged_accounts','like_post'],true);
-        $params['targets']=array_values(array_unique(array_map(fn($v)=>$post ? ReadPostsProcess::postCode((string)$v) : Handles::normalize((string)$v),$targets)));
+        $special=str_starts_with($action,'highlight_') || $action==='read_highlights';
+        $params['targets']=array_values(array_unique(array_map(fn($v)=>$special ? trim((string)$v) : ($post ? ReadPostsProcess::postCode((string)$v) : Handles::normalize((string)$v)),$targets)));
         return $params;
     }
     public function steps(string $action,array $params): array {
-        $adapter=match($action){'read_post'=>'retrieve_post','read_account_posts'=>'read_posts','read_profile'=>'open_profile',default=>$action};
+        $adapter=match($action){'read_post'=>'retrieve_post','read_account_posts'=>'read_posts','read_profile'=>'open_profile','highlight_add','highlight_remove','highlight_create'=>'highlight_edit',default=>$action};
         return array_map(function($target)use($action,$adapter,$params){
             $post=in_array($action,['read_post','read_tagged_accounts','like_post'],true);
-            $input=[$post ? 'code':'handle'=>$target,'engine_action'=>$action,'target'=>$target,'comments'=>(int)($params['options']['comments'] ?? 20),'limit'=>(int)($params['options']['limit'] ?? 5),'only'=>$params['only'] ?? [],'include_pinned'=>true];
+            $input=[$post ? 'code':'handle'=>$target,'engine_action'=>$action,'target'=>$target,'comments'=>(int)($params['options']['comments'] ?? 20),'limit'=>(int)($params['options']['limit'] ?? 5),'only'=>$params['only'] ?? [],'include_pinned'=>true,'direction'=>$action==='read_followers'?'followers':'following'];
+            if(str_starts_with($action,'highlight_') || $action==='read_highlights') {
+                $binding=app(\hexa_package_instagram\Domains\Config\InstagramConfigRepository::class)->findAccount((string)($params['session'] ?? ''));
+                $input['handle']=Handles::normalize((string)($binding['instagram_username'] ?? ''));
+                $input['highlight_id']=$target==='self'?'':$target;$input['operation']=$action;
+                $input['title']=(string)($params['options']['title'] ?? '');$input['story_ids']=(array)($params['options']['story_ids'] ?? []);
+                if($action!=='read_highlights' && (!$input['story_ids'] || array_filter($input['story_ids'],fn($id)=>!ctype_digit((string)$id)))) throw new \InvalidArgumentException('Exact numeric story ids are required.');
+            }
             if($post) {
                 $owner=(string)($params['options']['owner'] ?? '');
                 if($owner==='') $owner=(string)(StoredResult::query()->where('action','read_post')->where('target',$target)->where('outcome','done')->latest('id')->first()?->record['evidence']['owner'] ?? '');

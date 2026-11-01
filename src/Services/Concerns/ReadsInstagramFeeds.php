@@ -263,6 +263,12 @@ trait ReadsInstagramFeeds
      */
     public function followingFeed(?string $profile, string $username, int $max = 500): array
     {
+        return $this->networkFeed($profile,$username,$max,'following');
+    }
+
+    public function networkFeed(?string $profile,string $username,int $max=500,string $direction='following'): array
+    {
+        if(!in_array($direction,['following','followers'],true))throw new \InvalidArgumentException('Unknown network direction.');
         $resolved = $this->config->resolveProfile($profile);
         $username = ltrim($this->config->normalizeUsername($username), '@');
         if ($username === '') {
@@ -272,7 +278,7 @@ trait ReadsInstagramFeeds
 
         $result = $this->browser->runAutomation($resolved, [
             ['type' => 'goto', 'label' => 'open_profile', 'url' => 'https://www.instagram.com/' . $username . '/', 'wait_until' => 'domcontentloaded', 'timeout_ms' => 30000, 'wait_ms' => 2500],
-            ['type' => 'evaluate', 'label' => 'read_following', 'code' => self::restJs(self::followingFeedJs()), 'args' => ['max' => $max, 'page_size' => 50, 'min_gap_ms' => 1500, 'max_gap_ms' => 3500]],
+            ['type' => 'evaluate', 'label' => 'read_following', 'code' => self::restJs(self::followingFeedJs()), 'args' => ['direction'=>$direction,'max' => $max, 'page_size' => 50, 'min_gap_ms' => 1500, 'max_gap_ms' => 3500]],
         ], ['transport_timeout_ms' => 60000 + (int) ceil($max / 50) * 8000]);
 
         $feed = json_decode((string) ($this->resultByLabel($result, 'read_following')['text'] ?? ''), true);
@@ -380,7 +386,7 @@ JS;
   let maxId = '';
   let error = null;
   while (users.length < args.max) {
-    const { status, json } = await getJson('/api/v1/friendships/' + userId + '/following/?count=' + args.page_size + (maxId ? '&max_id=' + encodeURIComponent(maxId) : ''));
+    const { status, json } = await getJson('/api/v1/friendships/' + userId + '/' + args.direction + '/?count=' + args.page_size + (maxId ? '&max_id=' + encodeURIComponent(maxId) : ''));
     if (!json || !Array.isArray(json.users)) { error = 'Instagram returned status ' + status + '.'; break; }
     for (const user of json.users) users.push({ username: user.username, full_name: user.full_name || '', user_id: String(user.pk || user.id || ''), is_private: !!user.is_private, is_verified: !!user.is_verified });
     maxId = json.next_max_id || '';

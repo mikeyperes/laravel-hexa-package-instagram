@@ -166,3 +166,10 @@ Human-mode actions, write approvals, story and direct-message actions remain lat
 Add human transport through a network-generic Social Automation bridge; verified receipt gates for follow, unfollow and like; local list add; remove unrestricted follow; explicit logged-in fallback for inconclusive public embeds and session-busy stop mapping.
 
 Human account-post collection returns links and pinned flags only, without times. Human routes use home, Instagram Search, click the account result, and click the profile-grid post. A known owner can be supplied with --owner. URL navigation is a declared fallback only when no link path exists.
+
+## Stories and source images (2026-11-01)
+
+Add shared story reads and cached CDN downloads with source identity; add human-only highlight actions and reject legacy background edits.
+`instagram:stories ACCOUNT --profile=SESSION --mode=efficient|human --json`; `instagram:stories STORY_URL --download --profile=SESSION --json`; `instagram:highlight show|add|remove|create --target=ID --story-id=ID --profile=SESSION --approval=RECEIPT --json` (writes also support `--dry-run`).
+
+Network reads: `instagram:network following|followers ACCOUNT --profile=SESSION --mode=efficient|human --limit=100 --json` uses the existing paced paginated reader and shared action records.

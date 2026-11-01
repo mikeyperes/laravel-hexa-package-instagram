@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.22.0 (2026-11-01)
+
+- Add shared story reads and cached CDN downloads with source identity; add human-only highlight actions and reject legacy background edits.
+
 ## 1.21.1 (2026-11-01)
 
 - Declare honest human account-post links/pinned coverage and owner-aware search/grid navigation.
