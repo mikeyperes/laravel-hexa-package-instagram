@@ -180,4 +180,11 @@ final class InstagramActionRunnerTest extends TestCase
         }
         $this->assertSame(0,DB::table('human_behavior_actions')->count());
     }
+    public function test_generic_command_optional_json_defaults_and_single_or_list_input(): void {
+        $reader=$this->createMock(InstagramScraperService::class);$reader->method('readPost')->willReturn(['success'=>true,'post'=>['caption'=>'Fixture']]);$this->app->instance(InstagramScraperService::class,$reader);
+        $this->artisan('instagram:run',['action'=>'read_post','--profile'=>'instagram-public','--targets'=>'ABCDEF','--only'=>'caption','--json'=>true])->assertExitCode(0);
+        $this->artisan('instagram:run',['action'=>'read_post','--profile'=>'instagram-public','--targets'=>'["ABCDEF","GHIJKL"]','--skip'=>'["ABCDEF"]','--only'=>'caption','--json'=>true])->assertExitCode(0);
+        $this->assertSame(2,DB::table('instagram_action_results')->count());
+    }
+
 }

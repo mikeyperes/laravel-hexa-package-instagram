@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.24.1 - 2026-11-01
+- Correct optional JSON defaults in the generic action command; add single/list command coverage.
+- Complete Instagram Feature suite: 41 tests, 290 assertions, no errors.
+
 ## 1.24.0 (2026-11-01)
 
 - Complete the task-action entry point for single/list targets and optional synchronous readback. Wrap the existing Facebook official publisher with the same receipt and shared-limit runner. Import only toolbox-verified approval envelopes; reject legacy background publication.
