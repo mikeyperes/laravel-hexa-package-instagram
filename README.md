@@ -187,3 +187,5 @@ Complete the task-action entry point for single/list targets and optional synchr
 Publication lists supply options.keys as an exact target-to-stable-key map; keys must be nonempty and distinct. Optional options.captions maps target to caption. These maps remain part of the verified approval binding.
 
 Human failures keep diagnostics before part filtering and successful-output shaping. Human profile and network results include the common username/biography and users/complete fields. Automated verification: 71 Instagram Feature tests, 541 assertions passed.
+
+Account discovery keeps an account inconclusive when usable posts have missing publication dates and none proves recent activity. Missing dates never establish inactivity; the collected evidence is retained for recovery.

@@ -102,3 +102,11 @@
 - Found: the action lifecycle matrix showed read_account_posts failure diagnostics were discarded when its evidence was reduced to a posts list.
 - Fixed: apply profile/posts shapes and selected-part filtering to successful outcomes only; keep structured errors and page state intact for every failed action. Normalize shared profile/network fields on successful human reads.
 - Proof: final Instagram Feature suite 71 tests, 541 assertions passed. No live write or held post campaign was run.
+
+## IG-2026-11-02-01 - Undated posts falsely established inactivity (high)
+
+- Symptom: successful public post reads with empty publication dates were reported as inactive.
+- Impact: local event sources could be incorrectly screened out without evidence of their latest activity.
+- Cause: the recent-post filter treated absent dates as old dates and its empty result unconditionally selected inactive.
+- Patch: when no dated post establishes recency and any otherwise usable post is undated, report unreadable with the retained post evidence and a precise missing-date reason.
+- Guard: CRITICAL marker before the inactivity decision in InstagramFollowAuditService; known older dates keep their existing behavior.

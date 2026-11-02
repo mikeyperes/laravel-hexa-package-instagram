@@ -268,6 +268,14 @@ class InstagramFollowAuditService
                     $evidence['posts'] = array_values(array_filter($usable, static fn (array $post): bool => $since === null
                         || ($post['posted_at'] !== '' && \Carbon\Carbon::parse($post['posted_at'])->greaterThanOrEqualTo($since))));
                     if ($evidence['posts'] === []) {
+                        // CRITICAL - see BUGLOG.md IG-2026-11-02-01. Unknown dates
+                        // cannot prove inactivity, even when other posts are old.
+                        if ($recentDays > 0 && array_filter($usable, static fn (array $post): bool => $post['posted_at'] === '')) {
+                            $report($candidate + ['status' => 'unreadable', 'score' => 0, 'answers' => [], 'event_posts' => [],
+                                'reason' => 'Posts were read, but publication dates were missing; recent activity could not be verified.',
+                                'evidence' => ['posts' => $usable]]);
+                            continue;
+                        }
                         $what = $photosOnly ? 'photo posts' : 'posts';
                         $report($candidate + ['status' => 'inactive', 'score' => 0, 'answers' => [], 'event_posts' => [],
                             'reason' => 'No '.$what.($recentDays > 0 ? ' in the last '.$recentDays.' days' : '').($newest ? ' (newest '.\Carbon\Carbon::parse($newest)->format('M j, Y').')' : '').'.']);

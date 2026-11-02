@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.25.3 - 2026-11-02
+- Keep account discovery inconclusive when undated usable posts prevent proof of recent activity (IG-2026-11-02-01).
+
 ## 1.25.2 - 2026-11-01
 - Final Feature suite: 71 tests, 541 assertions, zero errors.
 - Exercise every efficient read and every human recipe for counting, repeat safety, skip or list inputs, shared stops and highlight minimum gaps.
