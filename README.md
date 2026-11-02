@@ -189,3 +189,5 @@ Publication lists supply options.keys as an exact target-to-stable-key map; keys
 Human failures keep diagnostics before part filtering and successful-output shaping. Human profile and network results include the common username/biography and users/complete fields. Automated verification: 71 Instagram Feature tests, 541 assertions passed.
 
 Account discovery keeps an account inconclusive when usable posts have missing publication dates and none proves recent activity. Missing dates never establish inactivity; the collected evidence is retained for recovery.
+
+Retain observed publication dates in account-post action evidence so consumers can recover dates omitted by public post embeds.

@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.25.4 - 2026-11-02
+- Retain observed publication dates in account-post action evidence so consumers can recover dates omitted by public post embeds.
+
 ## 1.25.3 - 2026-11-02
 - Keep account discovery inconclusive when undated usable posts prevent proof of recent activity (IG-2026-11-02-01).
 

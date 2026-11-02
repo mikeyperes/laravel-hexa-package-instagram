@@ -56,7 +56,10 @@ final class BackgroundTransport
                     $row = $raw['data']['accounts'][$account] ?? []; $items = array_values($row['posts'] ?? []);
                     $raw['success'] = !empty($row['success']);
                 }
+                // CRITICAL - see BUGLOG.md IG-2026-11-02-01. Public embeds may
+                // omit dates; preserve the profile feed's own publication evidence.
                 $data['posts'] = array_map(fn ($post) => ['url' => $post['url'] ?? '', 'code' => $post['shortcode'] ?? '',
+                    'posted_at' => (string) ($post['posted_at'] ?? ''),
                     'pinned' => $post['pinned'] ?? null], $items);
                 if (empty($raw['success'])) $raw['message'] = trim(($row['message'] ?? '').' '.($raw['message'] ?? '').' '.($raw['detail'] ?? ''));
                 break;

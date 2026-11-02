@@ -110,3 +110,5 @@
 - Cause: the recent-post filter treated absent dates as old dates and its empty result unconditionally selected inactive.
 - Patch: when no dated post establishes recency and any otherwise usable post is undated, report unreadable with the retained post evidence and a precise missing-date reason.
 - Guard: CRITICAL marker before the inactivity decision in InstagramFollowAuditService; known older dates keep their existing behavior.
+
+- Date recovery: account-post action evidence now retains each observed profile-feed publication date. A public embed can omit that field; consumers can use the date from the same post without another network read.
