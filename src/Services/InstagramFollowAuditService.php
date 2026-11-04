@@ -229,7 +229,11 @@ class InstagramFollowAuditService
             foreach ($batch as $candidate) {
                 $name = $candidate['username'];
                 $feed = (array) ($feeds[$name] ?? []);
-                if (! ($feed['success'] ?? false) || ($candidate['is_private'] && ($feed['posts'] ?? []) === [])) {
+                // CRITICAL - see BUGLOG.md IG-2026-11-04-01. Posts read from a partly refused account are
+                // judged: a pass flags it, anything else stays unreadable so the unread posts are tried again.
+                $partial = ! ($feed['success'] ?? false) && ! empty($feed['partial']) && ($feed['posts'] ?? []) !== [];
+                $unreadPart = $partial ? 'Only some posts were read ('.((string) ($feed['message'] ?? '') ?: 'the rest were refused').'); a match could not be ruled out.' : '';
+                if ((! ($feed['success'] ?? false) && ! $partial) || ($candidate['is_private'] && ($feed['posts'] ?? []) === [])) {
                     $report($candidate + [
                         'status' => $candidate['is_private'] ? 'private' : 'unreadable',
                         'score' => 0,
@@ -276,6 +280,10 @@ class InstagramFollowAuditService
                                 'evidence' => ['posts' => $usable]]);
                             continue;
                         }
+                        if ($partial) {
+                            $report($candidate + ['status' => 'unreadable', 'score' => 0, 'answers' => [], 'event_posts' => [], 'reason' => $unreadPart]);
+                            continue;
+                        }
                         $what = $photosOnly ? 'photo posts' : 'posts';
                         $report($candidate + ['status' => 'inactive', 'score' => 0, 'answers' => [], 'event_posts' => [],
                             'reason' => 'No '.$what.($recentDays > 0 ? ' in the last '.$recentDays.' days' : '').($newest ? ' (newest '.\Carbon\Carbon::parse($newest)->format('M j, Y').')' : '').'.']);
@@ -285,6 +293,9 @@ class InstagramFollowAuditService
                 $verdict = $this->judge($candidate, $evidence, $criteria, $options);
                 if (is_callable($options['post_judge'] ?? null) && $verdict['status'] === 'match') {
                     $verdict = $this->applyPostJudge($candidate, $evidence, $verdict, $options['post_judge']);
+                }
+                if ($partial && $verdict['status'] !== 'match') {
+                    $verdict = ['status' => 'unreadable', 'score' => 0, 'answers' => [], 'event_posts' => [], 'reason' => $unreadPart];
                 }
                 $report($candidate + $verdict + ['evidence' => $evidence]);
             }

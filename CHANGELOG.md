@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.25.5 - 2026-11-04
+- Account audits judge the posts read from a partly refused account: a pass flags it, anything else stays unreadable so it is tried again (IG-2026-11-04-01).
+
 ## 1.25.4 - 2026-11-02
 - Retain observed publication dates in account-post action evidence so consumers can recover dates omitted by public post embeds.
 

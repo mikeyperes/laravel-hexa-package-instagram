@@ -1,5 +1,13 @@
 # Instagram package bug log
 
+## IG-2026-11-04-01 - A partly refused account discarded the posts that were read (high)
+
+- Patched 2026-11-04 in 1.25.5.
+- Symptom: @rabbiteller discovery marked accounts such as @standwithus and @dodgers "Instagram engine read was inconclusive" although most of their posts were read; only one post embed came back without media.
+- Cause: `InstagramFollowAuditService::screen()` treated any unsuccessful feed as unreadable and ignored its `partial` posts.
+- Patch: partial posts are judged; a match flags the account, any other verdict (including no recent posts) stays unreadable so the next run retries it.
+- Guard: `CRITICAL - see BUGLOG.md IG-2026-11-04-01` in `screen()`; `InstagramFollowAuditPartialTest`.
+
 ## IG-2026-10-04-01 — Public reads ignored the caller deadline and overstated route evidence (high)
 
 - **Symptom:** fetches/retry pauses continued beyond the JPN caller budget; uncertain-profile messages claimed a second NordVPN server without observed route proof. Carousel extraction always reported one complete media item.

@@ -190,4 +190,6 @@ Human failures keep diagnostics before part filtering and successful-output shap
 
 Account discovery keeps an account inconclusive when usable posts have missing publication dates and none proves recent activity. Missing dates never establish inactivity; the collected evidence is retained for recovery.
 
+When Instagram refuses only some of an account's posts, the posts that were read are still judged: a pass flags the account, any other result keeps it inconclusive so the next run reads it again.
+
 Retain observed publication dates in account-post action evidence so consumers can recover dates omitted by public post embeds.
