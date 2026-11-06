@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.25.6 - 2026-11-06
+- The logged-out public reader counts its read limits per exit IP, so a new NordVPN machine starts its own budget (IG-2026-11-06-01).
+
 ## 1.25.5 - 2026-11-04
 - Account audits judge the posts read from a partly refused account: a pass flags it, anything else stays unreadable so it is tried again (IG-2026-11-04-01).
 

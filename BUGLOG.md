@@ -1,5 +1,13 @@
 # Instagram package bug log
 
+## IG-2026-11-06-01 - Changing the reader's IP did not give it a new read budget (high)
+
+- Patched 2026-11-06 in 1.25.6.
+- Symptom: @rabbiteller discovery left 44 of 68 accounts unread with "limit_exhausted ... wait_seconds 11244" although the reader had already moved to a fresh NordVPN machine.
+- Cause: `SessionActor` counted every read against the session name only; the logged-out reader has no Instagram account, so the limit belongs to the exit IP it reads from.
+- Patch: for `instagram.public_reader_profile` the limit key adds the pinned NordVPN machine; other sessions are unchanged.
+- Guard: `CRITICAL - see BUGLOG.md IG-2026-11-06-01` in `SessionActor::actorKey()`.
+
 ## IG-2026-11-04-01 - A partly refused account discarded the posts that were read (high)
 
 - Patched 2026-11-04 in 1.25.5.
