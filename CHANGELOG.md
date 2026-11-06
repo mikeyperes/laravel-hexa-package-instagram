@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.25.7 - 2026-11-06
+- The logged-out public reader has no read limit; only logged-in sessions are limited (IG-2026-11-06-02).
+
 ## 1.25.6 - 2026-11-06
 - The logged-out public reader counts its read limits per exit IP, so a new NordVPN machine starts its own budget (IG-2026-11-06-01).
 

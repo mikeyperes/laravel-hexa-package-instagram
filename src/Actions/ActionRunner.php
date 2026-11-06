@@ -44,7 +44,10 @@ final class ActionRunner
                     }
                     $device = Device::query()->where('profile', $request->session)->first();
                     if ($device?->inCooldown()) { $result->stop = 'cooldown'; $result->errors[] = ['wait_seconds' => max(1, (int) now()->diffInSeconds($device->cooldown_until, false)), 'reason' => $device->cooldown_reason]; break; }
-                    $wait = $action->limitKey() === '' ? 0 : $this->limiter->waitFor($actor, $action->limitKey());
+                    // CRITICAL - see BUGLOG.md IG-2026-11-06-02: the logged-out reader has no account to protect,
+                    // so it has no read limit; Instagram refusals are handled by changing its IP.
+                    $limited = $action->limitKey() !== '' && ! in_array($request->session, (array) config('instagram.unlimited_sessions', [config('instagram.public_reader_profile', 'instagram-public')]), true);
+                    $wait = $limited ? $this->limiter->waitFor($actor, $action->limitKey()) : 0;
                     if ($wait > 0) { $result->stop = 'limit_exhausted'; $result->errors[] = ['wait_seconds' => $wait, 'limit' => $action->limitKey()]; break; }
                     $last = StoredResult::query()->where('session', $request->session)->latest('performed_at')->first();
                     if ($last) {
@@ -54,7 +57,7 @@ final class ActionRunner
                     }
                     $one = $action->run($request->forTarget($target));
                     // Conservatively count every dispatched attempt, including uncertain reads.
-                    if ($action->limitKey() !== '') $this->limiter->record($actor, $action->limitKey());
+                    if ($limited) $this->limiter->record($actor, $action->limitKey());
                     foreach ($one->records as $record) {
                         StoredResult::query()->create(['action' => $key, 'session' => $request->session, 'target' => $target, 'mode' => $request->mode->value,
                             'outcome' => $record->outcome, 'repeat_key' => $repeatKey, 'record' => $record->jsonSerialize(), 'performed_at' => $record->at]);

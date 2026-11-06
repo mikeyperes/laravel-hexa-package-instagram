@@ -7,7 +7,7 @@ return [
         'person' => ['personal blog', 'public figure', 'artist', 'musician', 'journalist'],
     ],
     'enabled' => env('INSTAGRAM_ENABLED', true),
-    'version' => '1.25.6',
+    'version' => '1.25.7',
     // Account discovery through another account's following list or stories (InstagramFollowAuditService).
     'follow_audit' => [
         'model' => env('INSTAGRAM_FOLLOW_AUDIT_MODEL', 'claude-haiku-4-5-20251001'),
@@ -27,6 +27,8 @@ return [
     ],
     // Logged-out browser profile for instagram:posts --allow-public-fallback (each account's public profile embed).
     'public_reader_profile' => env('INSTAGRAM_PUBLIC_READER_PROFILE', 'instagram-public'),
+    // Logged-out sessions with no Instagram account: no read limits (IG-2026-11-06-02).
+    'unlimited_sessions' => [env('INSTAGRAM_PUBLIC_READER_PROFILE', 'instagram-public')],
     // Browser profiles that may only read Instagram (scout accounts): follow, post, edit, delete and Highlight
     // changes are refused (423). Other packages may add their reader profiles here at boot.
     'read_only_profiles' => array_values(array_filter(array_map('trim', explode(',', (string) env('INSTAGRAM_READ_ONLY_PROFILES', ''))))),

@@ -12,12 +12,20 @@ final class InstagramActionRunnerTest extends TestCase
 {
     protected function setUp(): void {
         parent::setUp();
+        // These fixtures use instagram-public as an ordinary limited session; the logged-out reader is tested separately.
+        config(['instagram.unlimited_sessions' => []]);
         Schema::create('settings',function(Blueprint $t){$t->id();$t->string('key')->unique();$t->text('value')->nullable();$t->string('type')->default('text');$t->string('group')->nullable();$t->timestamps();});
         (require base_path('packages/hexawebsystems/laravel-hexa-package-instagram/database/migrations/2026_11_01_172000_create_instagram_action_results.php'))->up();
         (require base_path('packages/hexawebsystems/laravel-hexa-package-human-behavior/database/migrations/2026_10_30_000001_create_human_behavior_actions_table.php'))->up();
         (require base_path('packages/hexawebsystems/laravel-hexa-package-social-automation/database/migrations/2026_10_28_000001_create_social_automation_tables.php'))->up();
         Schema::create('activity_logs',function(Blueprint $t){$t->id();$t->unsignedBigInteger('user_id')->nullable();$t->string('action')->nullable();$t->string('category')->nullable();$t->text('description')->nullable();$t->text('context')->nullable();$t->string('related_type')->nullable();$t->unsignedBigInteger('related_id')->nullable();$t->string('ip_address')->nullable();$t->string('user_timezone')->nullable();$t->timestamps();});
         $sessions=$this->createMock(BrowserSessionRegistryContract::class);$sessions->method('all')->willReturn([['profile_id'=>'instagram-public']]);$this->app->instance(BrowserSessionRegistryContract::class,$sessions);
+    }
+    public function test_logged_out_reader_has_no_read_limit(): void {
+        config(['instagram.unlimited_sessions' => ['instagram-public']]);
+        $reader=$this->createMock(InstagramScraperService::class);$reader->method('readPost')->willReturn(['success'=>true,'post'=>['caption'=>'Hello','owner'=>'test','slides'=>[]]]);$this->app->instance(InstagramScraperService::class,$reader);
+        $r=app(ActionRunner::class)->run('read_post',new ActionRequest('instagram-public',['ABCDEF'],only:['caption']));
+        $this->assertTrue($r->success);$this->assertSame(0,DB::table('human_behavior_actions')->count());
     }
     public function test_read_filters_parts_persists_and_counts_shared_session(): void {
         $reader=$this->createMock(InstagramScraperService::class);$reader->expects($this->once())->method('readPost')->willReturn(['success'=>true,'post'=>['caption'=>'Hello','owner'=>'test','slides'=>[]]]);$this->app->instance(InstagramScraperService::class,$reader);

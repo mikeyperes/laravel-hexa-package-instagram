@@ -1,5 +1,13 @@
 # Instagram package bug log
 
+## IG-2026-11-06-02 - The logged-out reader was held to an account read limit (high)
+
+- Patched 2026-11-06 in 1.25.7.
+- Symptom: @rabbiteller discovery stopped repeatedly on "limit_exhausted" (retrieve_post) although `instagram-public` is not logged in to any account.
+- Cause: `ActionRunner` applied the per-account human-behavior limits to every session, including the logged-out reader.
+- Patch: the limiter is skipped for `instagram.public_reader_profile`; logged-in sessions keep their limits.
+- Guard: `CRITICAL - see BUGLOG.md IG-2026-11-06-02` in `ActionRunner::run()`.
+
 ## IG-2026-11-06-01 - Changing the reader's IP did not give it a new read budget (high)
 
 - Patched 2026-11-06 in 1.25.6.
