@@ -49,7 +49,9 @@ final class ActionRunner
                     $limited = $action->limitKey() !== '' && ! in_array($request->session, (array) config('instagram.unlimited_sessions', [config('instagram.public_reader_profile', 'instagram-public')]), true);
                     $wait = $limited ? $this->limiter->waitFor($actor, $action->limitKey()) : 0;
                     if ($wait > 0) { $result->stop = 'limit_exhausted'; $result->errors[] = ['wait_seconds' => $wait, 'limit' => $action->limitKey()]; break; }
-                    $last = StoredResult::query()->where('session', $request->session)->latest('performed_at')->first();
+                    // CRITICAL - see BUGLOG.md IG-2026-11-06-03: no human-behavior pacing for the logged-out
+                    // reader; its caller (JPN's public reader) sets its own random pauses.
+                    $last = $limited ? StoredResult::query()->where('session', $request->session)->latest('performed_at')->first() : null;
                     if ($last) {
                         [$min, $max] = $this->settings->timing()['between_tasks_seconds'];
                         $remaining = random_int((int) ceil($min), (int) ceil($max)) - (int) $last->performed_at->diffInSeconds(now(), true);

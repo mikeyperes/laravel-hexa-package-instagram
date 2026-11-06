@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.25.8 - 2026-11-06
+- The logged-out public reader skips the human-behavior wait between actions; JPN's reader paces it (IG-2026-11-06-03).
+
 ## 1.25.7 - 2026-11-06
 - The logged-out public reader has no read limit; only logged-in sessions are limited (IG-2026-11-06-02).
 

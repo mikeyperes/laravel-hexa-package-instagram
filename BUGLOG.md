@@ -1,5 +1,13 @@
 # Instagram package bug log
 
+## IG-2026-11-06-03 - The logged-out reader waited like a logged-in person between every read (high)
+
+- Patched 2026-11-06 in 1.25.8.
+- Symptom: @rabbiteller discovery read about 8 accounts an hour; every post read waited the human between-task gap meant for logged-in accounts.
+- Cause: `ActionRunner` applied `between_tasks_seconds` to every session.
+- Patch: the wait is skipped for `instagram.unlimited_sessions`; JPN's reader pauses 2-5 minutes every 15-25 accounts instead.
+- Guard: `CRITICAL - see BUGLOG.md IG-2026-11-06-03` in `ActionRunner::run()`.
+
 ## IG-2026-11-06-02 - The logged-out reader was held to an account read limit (high)
 
 - Patched 2026-11-06 in 1.25.7.
