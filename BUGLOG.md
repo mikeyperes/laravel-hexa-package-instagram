@@ -1,5 +1,13 @@
 # Instagram package bug log
 
+## IG-2026-11-06-04 - Most logged-out photo-post reads came back "without its media" (critical)
+
+- Patched 2026-11-06 in 1.25.9.
+- Symptom: in six hours of @rabbiteller discovery, 593 of 942 photo-post reads (63%) failed with "Instagram returned the post embed without its media", while reels failed 2 of 652; 86 of 142 accounts in one pass stayed unreadable.
+- Cause: `publicPostSlidesJs()` read only the embed's contextJSON, which Instagram now omits for most photo posts; the rendered photo (`img.EmbeddedMediaImage`) and caption were never read.
+- Patch: when contextJSON has no media, read the largest photo, caption and owner from the embed HTML (post date comes from the profile feed, JPN-2026-11-02-02).
+- Guard: `CRITICAL - see BUGLOG.md IG-2026-11-06-04` in `publicPostSlidesJs()`.
+
 ## IG-2026-11-06-03 - The logged-out reader waited like a logged-in person between every read (high)
 
 - Patched 2026-11-06 in 1.25.8.

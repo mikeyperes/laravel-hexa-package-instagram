@@ -373,7 +373,28 @@ return (async () => {
       const match = html.match(/"contextJSON":("(?:[^"\\]|\\.)*")/);
       const context = match ? JSON.parse(JSON.parse(match[1])) : {};
       const media = context.gql_data?.shortcode_media || context.context?.media || null;
-      if (!media) { posts.push({ code, ok: false, status, error: 'Instagram returned the post embed without its media.' }); continue; }
+      if (!media) {
+        // CRITICAL - see BUGLOG.md IG-2026-11-06-04: most photo-post embeds carry no contextJSON media,
+        // only the rendered photo and caption; read those before calling the post unreadable.
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        const img = doc.querySelector('img.EmbeddedMediaImage');
+        const src = img?.getAttribute('srcset')?.split(',').map((s) => s.trim().split(' ')).sort((a, b) => parseInt(b[1] || '0') - parseInt(a[1] || '0'))[0]?.[0] || img?.getAttribute('src') || '';
+        if (!src) { posts.push({ code, ok: false, status, error: 'Instagram returned the post embed without its media.' }); continue; }
+        const captionEl = doc.querySelector('.Caption');
+        const owner = (doc.querySelector('.CaptionUsername, .UsernameText')?.textContent || '').trim();
+        let caption = captionEl ? captionEl.innerText || captionEl.textContent || '' : (img.getAttribute('alt') || '');
+        if (owner && caption.startsWith(owner)) caption = caption.slice(owner.length);
+        caption = caption.replace(/View all (\d+ )?comments?\s*$/i, '').trim();
+        const isCarousel = !!doc.querySelector('.Sidecar, [class*="Sidecar"]');
+        posts.push({
+          code, ok: true, status, source: 'embed_html',
+          owner, owner_name: '', caption, posted_at: '', location: '',
+          like_count: null, comment_count: null, comments: [],
+          is_carousel: isCarousel,
+          slides: [{ index: 1, is_video: false, image_url: src.replace(/&amp;/g, '&'), video_url: '' }],
+        });
+        continue;
+      }
       const edges = media.edge_sidecar_to_children?.edges || [];
       const nodes = edges.length ? edges.map((edge) => edge?.node || {}) : [media];
       posts.push({

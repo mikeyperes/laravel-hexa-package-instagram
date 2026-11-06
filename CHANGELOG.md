@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.25.9 - 2026-11-06
+- The logged-out post reader reads a photo post's photo and caption from the embed page itself when Instagram leaves out the post data (IG-2026-11-06-04).
+
 ## 1.25.8 - 2026-11-06
 - The logged-out public reader skips the human-behavior wait between actions; JPN's reader paces it (IG-2026-11-06-03).
 
