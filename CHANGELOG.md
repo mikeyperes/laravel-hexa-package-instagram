@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.25.10 - 2026-11-07
+- An account that shows the logged-out reader only Instagram's "profile may be broken or removed" page, even on a new IP, is reported private (private or removed account) instead of unreadable (IG-2026-11-07-01).
+
 ## 1.25.9 - 2026-11-06
 - The logged-out post reader reads a photo post's photo and caption from the embed page itself when Instagram leaves out the post data (IG-2026-11-06-04).
 

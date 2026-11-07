@@ -233,12 +233,15 @@ class InstagramFollowAuditService
                 // judged: a pass flags it, anything else stays unreadable so the unread posts are tried again.
                 $partial = ! ($feed['success'] ?? false) && ! empty($feed['partial']) && ($feed['posts'] ?? []) !== [];
                 $unreadPart = $partial ? 'Only some posts were read ('.((string) ($feed['message'] ?? '') ?: 'the rest were refused').'); a match could not be ruled out.' : '';
-                if ((! ($feed['success'] ?? false) && ! $partial) || ($candidate['is_private'] && ($feed['posts'] ?? []) === [])) {
+                // A reader that sees only Instagram's "broken or removed" page marks the account unavailable:
+                // logged out, that is a private or removed account, so it is private, not a read failure.
+                $hidden = $candidate['is_private'] || ! empty($feed['unavailable']);
+                if ((! ($feed['success'] ?? false) && ! $partial) || ($hidden && ($feed['posts'] ?? []) === [])) {
                     $report($candidate + [
-                        'status' => $candidate['is_private'] ? 'private' : 'unreadable',
+                        'status' => $hidden ? 'private' : 'unreadable',
                         'score' => 0,
                         'answers' => [],
-                        'reason' => $candidate['is_private'] ? 'Private account; its posts are not visible to this session.' : (string) ($feed['message'] ?? $unread),
+                        'reason' => $hidden ? 'Private or removed account; its posts are not visible to this session.' : (string) ($feed['message'] ?? $unread),
                     ]);
                     continue;
                 }
